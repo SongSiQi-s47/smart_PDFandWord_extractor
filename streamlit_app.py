@@ -219,13 +219,70 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             )
         
         with col2:
-            # Excel下载
-            excel_buffer = pd.ExcelWriter('temp.xlsx', engine='openpyxl')
-            df.to_excel(excel_buffer, index=False, sheet_name='提取结果')
-            excel_buffer.close()
+            # Excel下载 - 添加格式化
+            from io import BytesIO
+            import openpyxl
+            from openpyxl.styles import Font, Alignment, Border, Side
             
-            with open('temp.xlsx', 'rb') as f:
-                excel_data = f.read()
+            # 创建Excel文件
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='提取结果', index=False)
+                worksheet = writer.sheets['提取结果']
+                
+                # 设置列宽
+                column_widths = {
+                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10, 'G': 10
+                }
+                for col, width in column_widths.items():
+                    worksheet.column_dimensions[col].width = width
+                
+                # 设置表头样式
+                header_font = Font(bold=True, size=12)
+                header_alignment = Alignment(horizontal='center', vertical='center')
+                for col in range(1, len(df.columns) + 1):
+                    cell = worksheet.cell(row=1, column=col)
+                    cell.font = header_font
+                    cell.alignment = header_alignment
+                
+                # 设置数据行样式和行高
+                data_alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+                for row in range(2, len(df) + 2):
+                    # 计算每行最大字符数
+                    max_chars = 0
+                    for col in range(1, len(df.columns) + 1):
+                        cell_value = str(worksheet.cell(row=row, column=col).value or '')
+                        lines = cell_value.split('\n')
+                        for line in lines:
+                            line_chars = len(line)
+                            if line_chars > 30:
+                                needed_lines = (line_chars // 30) + 1
+                                max_chars = max(max_chars, needed_lines * 30)
+                            else:
+                                max_chars = max(max_chars, line_chars)
+                    
+                    # 计算行高
+                    estimated_lines = max(1, (max_chars // 30) + 1)
+                    row_height = max(20, estimated_lines * 18 + 10)
+                    worksheet.row_dimensions[row].height = row_height
+                    
+                    # 设置单元格对齐方式
+                    for col in range(1, len(df.columns) + 1):
+                        cell = worksheet.cell(row=row, column=col)
+                        cell.alignment = data_alignment
+                
+                # 设置边框
+                thin_border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                for row in worksheet.iter_rows(min_row=1, max_row=len(df) + 1, min_col=1, max_col=len(df.columns)):
+                    for cell in row:
+                        cell.border = thin_border
+            
+            excel_data = excel_buffer.getvalue()
             
             st.download_button(
                 label="📊 下载Excel文件",
@@ -234,10 +291,6 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-            
-            # 清理临时文件
-            if os.path.exists('temp.xlsx'):
-                os.unlink('temp.xlsx')
     else:
         st.error("❌ 未提取到任何数据")
 
