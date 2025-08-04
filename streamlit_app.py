@@ -282,9 +282,9 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 worksheet = writer.sheets['提取结果']
                 
                 # 设置列宽
-                column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
+                column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '功能描述', '标书描述', '合同描述', '来源文件']
                 column_widths = {
-                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
+                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 45, 'G': 10
                 }
                 for col, width in column_widths.items():
                     worksheet.column_dimensions[col].width = width

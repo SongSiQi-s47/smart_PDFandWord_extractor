@@ -263,7 +263,7 @@ class PDFWordTableExtractor:
             lvl1_value = mapped_data.get('一级模块名称', '')
             lvl2_value = mapped_data.get('二级模块名称', '')
             lvl3_value = mapped_data.get('三级模块名称', '')
-            desc_value = mapped_data.get('合同描述', '')
+            desc_value = mapped_data.get('合同描述', '')  # 直接获取合同描述
             
             # 新增：数据清洗函数
             def clean_module_name(text):
@@ -289,8 +289,8 @@ class PDFWordTableExtractor:
                 '一级模块名称': lvl1_cleaned if lvl1_cleaned else '',
                 '二级模块名称': lvl2_cleaned if lvl2_cleaned else '',
                 '三级模块名称': lvl3_cleaned if lvl3_cleaned else '',
-                '标书描述': '',
-                '合同描述': desc_cleaned if desc_cleaned else '',
+                '标书描述': '',  # Word合同文件，标书描述为空
+                '合同描述': desc_cleaned if desc_cleaned else '',  # Word合同内容放这里
                 '来源文件': os.path.basename(source_file),
             }
         else:
@@ -824,7 +824,7 @@ class PDFWordTableExtractor:
                             in_lvl3 = False
                             in_lvl2 = False
                             continue
-            
+
                     # 智能起始编号判断
                     if not extracting and lvl1_sample and lvl1_regex and lvl1_regex.match(text):
                         is_match, match_type, actual_digits = smart_start_match(lvl1_sample, text, lvl1_regex)
@@ -943,7 +943,7 @@ class PDFWordTableExtractor:
                             text_digits = re.sub(r'[^\d]', '', m2.group(1))
                             if len(text_digits) != lvl2_regex_info['expected_digit_length']:
                                 m2 = None
-                        
+                            
                         if m2:
                             if not has_lvl3_sample and should_enable_verification():
                                 new_level = reclassify_module(raw_text.strip(), 2)
