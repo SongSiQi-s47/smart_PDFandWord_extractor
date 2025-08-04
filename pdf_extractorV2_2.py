@@ -205,7 +205,7 @@ class PDFWordTableExtractor:
         """提取PDF标书文件中的表格（命令行版本）"""
         # 这个方法在Web应用中不会被使用，返回空列表
         return []
-    
+
     def extract_tables_from_pdf_contract(self, pdf_path: str) -> List[Dict]:
         """提取PDF合同文件中的表格"""
         # PDF合同文件暂时使用标书的提取逻辑
@@ -828,7 +828,7 @@ class PDFWordTableExtractor:
                             in_lvl3 = False
                             in_lvl2 = False
                             continue
-
+            
                     # 智能起始编号判断
                     if not extracting and lvl1_sample and lvl1_regex and lvl1_regex.match(text):
                         is_match, match_type, actual_digits = smart_start_match(lvl1_sample, text, lvl1_regex)
@@ -1014,7 +1014,8 @@ class PDFWordTableExtractor:
                                         lvl1_filled = True
                                         lvl2_filled = True
                                         in_lvl3 = False
-                                    continue
+                                continue  # 修复：这个continue应该和上面的if m2:对齐
+                    continue
 
                     # 处理一级模块
                     m1 = lvl1_regex.match(text) if lvl1_regex else None
@@ -1179,7 +1180,7 @@ class PDFWordTableExtractor:
             if "分项报价表" in para.text:
                 has_quotation_table = True
                 break
-        
+
         if not has_quotation_table:
             return data
         
@@ -1187,7 +1188,7 @@ class PDFWordTableExtractor:
         for table_idx, table in enumerate(doc.tables):
             rows = list(table.rows)
             if not rows:
-                continue
+                continue  # 修复：正确的缩进
             
             # 检查表头
             headers = [cell.text.strip().replace('\n', '') for cell in rows[0].cells]
@@ -1212,7 +1213,7 @@ class PDFWordTableExtractor:
                     if idx < len(cells):
                         cell_text = cells[idx].text.strip()
                         row_data[header] = cell_text
-                    else:
+                    else:  # 修复：正确的缩进
                         row_data[header] = ''
                 
                 # 检查是否有有效数据
