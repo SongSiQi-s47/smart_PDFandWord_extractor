@@ -196,876 +196,16 @@ class PDFWordTableExtractor:
             return []
             
     def setup_custom_headers(self):
-        """设置用户自定义的表头映射"""
-        print("\n" + "="*50)
-        print("📋 请根据Word文档中的实际表头输入对应的字段名")
-        print("="*50)
-        print("提示：如果某个字段在Word文档中没有，请直接回车跳过")
-        print()
-        
-        custom_headers = {}
-        
-        # 一级模块名称
-        lvl1_header = input("请输入Word文档中对应'一级模块名称'的表头（如：功能模块、模块名称等）：").strip()
-        if lvl1_header:
-            custom_headers[lvl1_header] = '一级模块名称'
-        
-        # 二级模块名称
-        lvl2_header = input("请输入Word文档中对应'二级模块名称'的表头（如：功能子项、子模块等）：").strip()
-        if lvl2_header:
-            custom_headers[lvl2_header] = '二级模块名称'
-        
-        # 三级模块名称
-        lvl3_header = input("请输入Word文档中对应'三级模块名称'的表头（如：三级模块、子项等）：").strip()
-        if lvl3_header:
-            custom_headers[lvl3_header] = '三级模块名称'
-        
-        # 合同描述
-        desc_header = input("请输入Word文档中对应'合同描述'的表头（如：功能描述、描述、备注等）：").strip()
-        if desc_header:
-            custom_headers[desc_header] = '合同描述'
-        
-        if custom_headers:
-            self.custom_headers = custom_headers
-            print(f"\n✅ 已设置自定义表头映射：")
-            for word_header, standard_field in custom_headers.items():
-                print(f"   {word_header} → {standard_field}")
-        else:
-            print("\n⚠️ 未设置任何自定义表头，将使用默认映射")
-            self.custom_headers = None
-        
-        return custom_headers
+        """设置用户自定义的表头映射（Web版本）"""
+        # Web版本不需要用户输入，返回空字典
+        return {}
 
     # ----------- PDF 标书（新版分层提取） -----------
     def extract_tables_from_pdf_bid(self, pdf_path: str) -> List[Dict]:
-        # 清空之前的状态变量
-        def clear_previous_state():
-            """清空之前的提取状态"""
-            self.previous_lvl1_sample = None
-            self.previous_lvl2_sample = None
-            self.previous_lvl3_sample = None
-            self.previous_end_sample = None
-            self.previous_lvl1_regex = None
-            self.previous_lvl2_regex = None
-            self.previous_lvl3_regex = None
-            self.previous_end_regex = None
-            # print("DEBUG: 已清空之前的提取状态")
-        
-        # 调用状态清空
-        clear_previous_state()
-        
-        # 新增：重新分类模块层级（移到函数开头）
-        def reclassify_module(text, current_level):
-            """重新分类模块层级"""
-            if current_level == 3 and has_lvl3_sample:
-                # 检查是否应该归为二级
-                if lvl2_regex and lvl2_regex.match(text):
-                    # if debug_enabled:
-                    #     print(f"DEBUG: 三级模块重新分类为二级: '{text}'")
-                    return 2
-                # 检查是否应该归为一级
-                elif lvl1_regex and lvl1_regex.match(text):
-                    # if debug_enabled:
-                    #     print(f"DEBUG: 三级模块重新分类为一级: '{text}'")
-                    return 1
-            
-            elif current_level == 2 and not has_lvl3_sample:
-                # 检查是否应该归为一级
-                if lvl1_regex and lvl1_regex.match(text):
-                    # if debug_enabled:
-                    #     print(f"DEBUG: 二级模块重新分类为一级: '{text}'")
-                    return 1
-            
-            return current_level
-        
-        # 新增：判断是否启用重新核验（移到函数开头）
-        def should_enable_verification():
-            """判断是否启用重新核验"""
-            if not lvl1_sample or not lvl2_sample:
-                return False
-            
-            lvl1_len = len(lvl1_sample)
-            lvl2_len = len(lvl2_sample)
-            
-            # 特殊情况：如果二级样例包含更多点号，认为二级更长
-            lvl1_dots = lvl1_sample.count('.')
-            lvl2_dots = lvl2_sample.count('.')
-            
-            if lvl2_dots > lvl1_dots:
-                # if debug_enabled:
-                #     print(f"DEBUG: 启用重新核验 - 二级点号({lvl2_dots}) > 一级点号({lvl1_dots})")
-                return True
-            
-            # 一般情况：比较字符串长度
-            if lvl2_len < lvl1_len:
-                # if debug_enabled:
-                #     print(f"DEBUG: 启用重新核验 - 二级长度({lvl2_len}) < 一级长度({lvl1_len})")
-                return True
-            
-            return False
-        
-        # 添加页码过滤函数
-        def is_page_number(text):
-            """判断是否为页码信息"""
-            page_patterns = [
-                r'^第\d+页$',
-                r'^Page\s*\d+$',
-                r'^-\s*\d+\s*-$',
-            ]
-            # 更严格的纯数字页码判断
-            if re.match(r'^\d+$', text.strip()):
-                # 如果数字小于等于3位数，且前后没有其他内容，可能是页码
-                if len(text.strip()) <= 3:
-                    return True
-            return any(re.match(pattern, text.strip()) for pattern in page_patterns)
-        
-        print("请输入各级编号样例（可回车跳过二级/三级）：")
-        lvl1_sample = input("一级模块编号样例（如9.1.3.4或（一））：").strip()
-        lvl2_sample = input("二级模块编号样例（如9.1.3.4.1或（二），可跳过）：").strip()
-        lvl3_sample = input("三级模块编号样例（如1），可跳过）：").strip()
-        end_sample = input("终止编号样例（遇到该编号停止提取）：").strip()
-
-        lvl1_regex_info = get_fuzzy_regex_from_sample(lvl1_sample) if lvl1_sample else None
-        lvl2_regex_info = get_fuzzy_regex_from_sample(lvl2_sample) if lvl2_sample else None
-        lvl3_regex_info = get_fuzzy_regex_from_sample(lvl3_sample) if lvl3_sample else None
-        end_regex_info = get_fuzzy_regex_from_sample(end_sample) if end_sample else None
-
-        lvl1_regex = lvl1_regex_info['regex'] if lvl1_regex_info else None
-        lvl2_regex = lvl2_regex_info['regex'] if lvl2_regex_info else None
-        lvl3_regex = lvl3_regex_info['regex'] if lvl3_regex_info else None
-        end_regex = end_regex_info['regex'] if end_regex_info else None
-
-        results = []
-        current_lvl1 = current_lvl2 = current_lvl3 = None
-        last_lvl1 = last_lvl2 = last_lvl3 = None
-        desc_lines = []
-        extracting = False
-        start_found = False
-        in_lvl3 = False
-        in_lvl2 = False
-
-        lvl1_filled = False
-        lvl2_filled = False
-        lvl1_to_fill = ""
-        lvl2_to_fill = ""
-
-        # 关键：判断是否有三级模块样例
-        has_lvl3_sample = bool(lvl3_sample)
-
-        # 补充回来：页面和行数统计
-        page_count = 0
-        line_count = 0
-        
-        # 新增：DEBUG控制变量
-        # debug_enabled = False
-
-        with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                page_num = page.page_number if hasattr(page, 'page_number') else pdf.pages.index(page)
-                
-                # 补充回来：页面计数
-                page_count += 1
-                
-                lines = (page.extract_text() or '').split('\n')
-                for i, raw_text in enumerate(lines):
-                    # 补充回来：行数计数
-                    line_count += 1
-                    
-                    # 处理原始文本
-                    text = re.sub(r'[\s\u3000]', '', raw_text)
-
-                    # 终止编号判断
-                    if end_regex and end_regex.match(text):
-                        is_match, match_type, actual_digits = smart_start_match(end_sample, text, end_regex)
-                        if is_match:
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 识别到终止编号: '{raw_text.strip()}'")
-                            extracting = False
-                            in_lvl3 = False
-                            in_lvl2 = False
-                            continue
-
-                    # 智能起始编号判断
-                    if not extracting and lvl1_sample and lvl1_regex and lvl1_regex.match(text):
-                        is_match, match_type, actual_digits = smart_start_match(lvl1_sample, text, lvl1_regex)
-                        if is_match:
-                            extracting = True
-                            start_found = True
-                            # debug_enabled = True  # 启用DEBUG
-                            current_lvl1 = raw_text.strip()
-                            lvl1_filled = False
-                            lvl1_to_fill = current_lvl1
-                            lvl2_to_fill = current_lvl2 if current_lvl2 else ""
-                            in_lvl2 = False
-                            # print(f"DEBUG: 识别到起始编号，开始提取 - 一级模块: '{current_lvl1}'")
-
-                    if not extracting:
-                        continue
-
-                    # 先判断三级
-                    m3 = lvl3_regex.match(text) if lvl3_regex else None
-                    if m3:
-                        # if debug_enabled:
-                        #     print(f"DEBUG: 三级模块匹配 - 原始文本: '{raw_text.strip()}', 处理后: '{text}'")
-                        
-                        # 新增：验证三级模块匹配的有效性
-                        def is_valid_lvl3_match(match_obj, original_text):
-                            """验证三级模块匹配是否有效"""
-                            if not match_obj:
-                                return False
-                            
-                            # 提取匹配的编号部分
-                            number_part = match_obj.group(1)
-                            title_part = match_obj.group(2).strip()
-                            
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 三级模块验证 - 编号部分: '{number_part}', 标题部分: '{title_part}'")
-                            
-                            # 检查标题部分是否有内容
-                            if not title_part:
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 三级模块标题为空: '{original_text}'")
-                                return False
-                            
-                            return True
-                        
-                        # 验证匹配有效性
-                        if not is_valid_lvl3_match(m3, raw_text.strip()):
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 三级模块验证失败，设为None")
-                            m3 = None
-                        
-                        if lvl3_regex_info and lvl3_regex_info['expected_digit_length']:
-                            text_digits = re.sub(r'[^\d]', '', m3.group(1))
-                            if len(text_digits) != lvl3_regex_info['expected_digit_length']:
-                                                            # if debug_enabled:
-                            #     print(f"DEBUG: 三级模块数字长度不匹配: 期望{lvl3_regex_info['expected_digit_length']}, 实际{len(text_digits)}")
-                                m3 = None
-
-                        if m3:
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 确认三级模块匹配成功")
-                            
-                            # 新增：重新核验逻辑
-                            if should_enable_verification():
-                                new_level = reclassify_module(raw_text.strip(), 3)
-                                if new_level != 3:
-                                    # 重新分类，跳过三级模块处理
-                                    m3 = None
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 三级模块重新分类为{new_level}级，跳过三级处理")
-                            
-                            if m3:  # 如果没有重新分类，继续正常处理
-                                # 遇到新三级编号时，先输出上一组（如果有描述）
-                                if in_lvl3 and desc_lines:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": lvl2_to_fill,
-                                        "三级模块名称": last_lvl3,
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path),
-                                        # "页码": page_count
-                                    })
-                                    desc_lines = []
-                                    lvl1_filled = True
-                                    lvl2_filled = True
-
-                                number = m3.group(1)
-                                title = m3.group(2).strip()
-                                current_lvl3 = f"{number} {title}".strip()
-                                last_lvl3 = current_lvl3
-                                in_lvl3 = True
-                                in_lvl2 = False
-                                lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
-                                lvl2_to_fill = current_lvl2 if not lvl2_filled else ""
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 设置三级模块: '{current_lvl3}'")
-                                continue
-                    elif lvl3_regex and lvl3_regex.match(text):
-                        pass
-                        # if debug_enabled:
-                        #     print(f"DEBUG: 正则匹配但被过滤 - 原始文本: '{raw_text.strip()}', 处理后: '{text}'")
-
-                    # 再判断二级
-                    m2 = lvl2_regex.match(text) if lvl2_regex else None
-                    if m2:
-                        # if debug_enabled:
-                        #     print(f"DEBUG: 二级模块匹配 - 原始文本: '{raw_text.strip()}', 处理后: '{text}'")
-                        
-                        # 新增：二级模块长度验证
-                        def is_valid_lvl2_match(match_obj, original_text):
-                            """验证二级模块匹配是否有效"""
-                            if not match_obj:
-                                return False
-                            
-                            # 提取匹配的编号部分
-                            number_part = match_obj.group(1)
-                            title_part = match_obj.group(2).strip()
-                            
-                            # 长度比较验证
-                            def check_lvl2_length_compatibility():
-                                """检查二级模块样例长度与匹配内容的兼容性"""
-                                if not lvl2_sample:
-                                    return True
-                                
-                                # 只在二级模块样例是简单数字格式时才启用长度判断
-                                def is_simple_number_format(sample):
-                                    """判断是否为简单数字格式"""
-                                    # 匹配 "1."、"1）"、"1)"、"1、" 等简单格式
-                                    simple_patterns = [
-                                        r'^\d+\.$',      # 1.
-                                        r'^\d+[）)]$',   # 1） 或 1)
-                                        r'^\d+、$',      # 1、
-                                        r'^\d+】$',      # 1】
-                                        r'^\d+]$',       # 1]
-                                    ]
-                                    return any(re.match(pattern, sample) for pattern in simple_patterns)
-                                
-                                # 如果不是简单数字格式，跳过长度比较
-                                if not is_simple_number_format(lvl2_sample):
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 二级样例不是简单数字格式，跳过长度比较: '{lvl2_sample}'")
-                                    return True
-                                
-                                # 提取样例中的数字长度
-                                sample_digits = re.sub(r'[^\d]', '', lvl2_sample)
-                                sample_digit_length = len(sample_digits)
-                                
-                                # 提取匹配内容中的数字长度
-                                match_digits = re.sub(r'[^\d]', '', number_part)
-                                match_digit_length = len(match_digits)
-                                
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 二级长度比较 - 样例数字长度: {sample_digit_length}, 匹配数字长度: {match_digit_length}")
-                                
-                                # 如果匹配的数字长度明显大于样例，可能是误匹配
-                                if match_digit_length > sample_digit_length + 2:  # 允许2位数字的误差
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 二级长度不匹配，可能是误匹配 - 样例: '{lvl2_sample}', 匹配: '{number_part}'")
-                                    return False
-                                
-                                return True
-                            
-                            # 检查标题部分是否有内容
-                            if not title_part:
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 二级模块标题为空: '{original_text}'")
-                                return False
-                            
-                            # 执行长度比较验证
-                            if not check_lvl2_length_compatibility():
-                                return False
-                            
-                            return True
-                        
-                        # 验证二级模块匹配有效性
-                        if not is_valid_lvl2_match(m2, raw_text.strip()):
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 二级模块验证失败，设为None")
-                            m2 = None
-                        
-                        if lvl2_regex_info and lvl2_regex_info['expected_digit_length']:
-                            text_digits = re.sub(r'[^\d]', '', m2.group(1))
-                            if len(text_digits) != lvl2_regex_info['expected_digit_length']:
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 二级模块数字长度不匹配: 期望{lvl2_regex_info['expected_digit_length']}, 实际{len(text_digits)}")
-                                m2 = None
-                        if m2:
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 确认二级模块匹配成功")
-                            
-                            # 新增：重新核验逻辑（没有三级样例时）
-                            if not has_lvl3_sample and should_enable_verification():
-                                new_level = reclassify_module(raw_text.strip(), 2)
-                                if new_level != 2:
-                                    # 重新分类，跳过二级模块处理
-                                    m2 = None
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 二级模块重新分类为{new_level}级，跳过二级处理")
-                            
-                            if m2:  # 如果没有重新分类，继续正常处理
-                                # 根据是否有三级模块使用不同逻辑
-                                if has_lvl3_sample:
-                                    # 有三级模块样例：使用老代码逻辑
-                                    if in_lvl3 and desc_lines:
-                                        results.append({
-                                            "一级模块名称": lvl1_to_fill,
-                                            "二级模块名称": lvl2_to_fill,
-                                            "三级模块名称": last_lvl3,
-                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
-                                        })
-                                        desc_lines = []
-                                        lvl1_filled = True
-                                        lvl2_filled = True
-                                        in_lvl3 = False
-                                    number = m2.group(1)
-                                    title = m2.group(2).strip()
-                                    current_lvl2 = f"{number} {title}".strip()
-                                    current_lvl3 = None
-                                    last_lvl2 = current_lvl2
-                                    lvl2_filled = False
-                                    in_lvl2 = True
-                                    in_lvl3 = False
-                                    
-                                    # 更新填充值
-                                    lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
-                                    lvl2_to_fill = current_lvl2
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 设置二级模块: '{current_lvl2}'")
-                                    continue
-
-                                else:
-                                    # 没有三级模块样例：使用新代码逻辑
-                                    # 如果之前有描述内容，先输出上一组
-                                    if desc_lines and in_lvl2 and last_lvl2:
-                                        results.append({
-                                            "一级模块名称": lvl1_to_fill,
-                                            "二级模块名称": last_lvl2,  # 使用上一个二级模块名称
-                                            "三级模块名称": "",
-                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
-                                        })
-                                        desc_lines = []
-                                        lvl1_filled = True
-                                        lvl2_filled = True
-                                    
-                                    # 更新当前二级模块
-                                    number = m2.group(1)
-                                    title = m2.group(2).strip()
-                                    current_lvl2 = f"{number} {title}".strip()
-                                    current_lvl3 = None
-                                    last_lvl2 = current_lvl2
-                                    lvl2_filled = False
-                                    in_lvl2 = True
-                                    in_lvl3 = False
-                                    
-                                    # 更新填充值
-                                    lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
-                                    lvl2_to_fill = current_lvl2
-
-                                    if in_lvl3 and desc_lines:
-                                        results.append({
-                                            "一级模块名称": lvl1_to_fill,
-                                            "二级模块名称": lvl2_to_fill,
-                                            "三级模块名称": last_lvl3,
-                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
-                                        })
-                                        desc_lines = []
-                                        lvl1_filled = True
-                                        lvl2_filled = True
-                                        in_lvl3 = False
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 设置二级模块: '{current_lvl2}'")
-                                    continue
-
-                    # 最后判断一级
-                    m1 = lvl1_regex.match(text) if lvl1_regex else None
-                    if m1:
-                        # if debug_enabled:
-                        #     print(f"DEBUG: 一级模块匹配 - 原始文本: '{raw_text.strip()}', 处理后: '{text}'")
-                        
-                        # 新增：一级模块长度验证
-                        def is_valid_lvl1_match(match_obj, original_text):
-                            """验证一级模块匹配是否有效"""
-                            if not match_obj:
-                                return False
-                            
-                            # 提取匹配的编号部分
-                            number_part = match_obj.group(1)
-                            title_part = match_obj.group(2).strip()
-                            
-                            # 长度比较验证
-                            def check_lvl1_length_compatibility():
-                                """检查一级模块样例长度与匹配内容的兼容性"""
-                                if not lvl1_sample:
-                                    return True
-                                
-                                # 只在一级模块样例是简单数字格式时才启用长度判断
-                                def is_simple_number_format(sample):
-                                    """判断是否为简单数字格式"""
-                                    # 匹配 "1."、"1）"、"1)"、"1、" 等简单格式
-                                    simple_patterns = [
-                                        r'^\d+\.$',      # 1.
-                                        r'^\d+[）)]$',   # 1） 或 1)
-                                        r'^\d+、$',      # 1、
-                                        r'^\d+】$',      # 1】
-                                        r'^\d+]$',       # 1]
-                                    ]
-                                    return any(re.match(pattern, sample) for pattern in simple_patterns)
-                                
-                                # 如果不是简单数字格式，跳过长度比较
-                                if not is_simple_number_format(lvl1_sample):
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 一级样例不是简单数字格式，跳过长度比较: '{lvl1_sample}'")
-                                    return True
-                                
-                                # 提取样例中的数字长度
-                                sample_digits = re.sub(r'[^\d]', '', lvl1_sample)
-                                sample_digit_length = len(sample_digits)
-                                
-                                # 提取匹配内容中的数字长度
-                                match_digits = re.sub(r'[^\d]', '', number_part)
-                                match_digit_length = len(match_digits)
-                                
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 一级长度比较 - 样例数字长度: {sample_digit_length}, 匹配数字长度: {match_digit_length}")
-                                
-                                # 如果匹配的数字长度明显大于样例，可能是误匹配
-                                if match_digit_length > sample_digit_length + 2:  # 允许2位数字的误差
-                                    # if debug_enabled:
-                                    #     print(f"DEBUG: 一级长度不匹配，可能是误匹配 - 样例: '{lvl1_sample}', 匹配: '{number_part}'")
-                                    return False
-                                
-                                return True
-                            
-                            # 检查标题部分是否有内容
-                            if not title_part:
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 一级模块标题为空: '{original_text}'")
-                                return False
-                            
-                            # 执行长度比较验证
-                            if not check_lvl1_length_compatibility():
-                                return False
-                            
-                            return True
-                        
-                        # 验证一级模块匹配有效性
-                        if not is_valid_lvl1_match(m1, raw_text.strip()):
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 一级模块验证失败，设为None")
-                            m1 = None
-                        
-                        if lvl1_regex_info and lvl1_regex_info['expected_digit_length']:
-                            text_digits = re.sub(r'[^\d]', '', m1.group(1))
-                            if len(text_digits) != lvl1_regex_info['expected_digit_length']:
-                                # if debug_enabled:
-                                #     print(f"DEBUG: 一级模块数字长度不匹配: 期望{lvl1_regex_info['expected_digit_length']}, 实际{len(text_digits)}")
-                                m1 = None
-                        if m1:
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 确认一级模块匹配成功")
-                            # 根据是否有三级模块使用不同逻辑
-                            if has_lvl3_sample:
-                                # 有三级模块样例：使用老代码逻辑
-                                if in_lvl3 and desc_lines:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": lvl2_to_fill,
-                                        "三级模块名称": last_lvl3,
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path),
-                                        # "页码": page_count
-                                    })
-                                    desc_lines = []
-                                    lvl1_filled = True
-                                    lvl2_filled = True
-                                    in_lvl3 = False
-                            else:
-                                # 没有三级模块样例：使用新代码逻辑
-                                if desc_lines and not in_lvl3:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": lvl2_to_fill,
-                                        "三级模块名称": "",
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path),
-                                        # "页码": page_count
-                                    })
-                                    desc_lines = []
-                                    lvl1_filled = True
-                                    lvl2_filled = True
-
-                                if in_lvl3 and desc_lines:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": lvl2_to_fill,
-                                        "三级模块名称": last_lvl3,
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path),
-                                        # "页码": page_count
-                                    })
-                                    desc_lines = []
-                                    lvl1_filled = True
-                                    lvl2_filled = True
-                                    in_lvl3 = False
-
-                            number = m1.group(1)
-                            title = m1.group(2).strip()
-                            current_lvl1 = f"{number} {title}".strip()
-                            current_lvl2 = current_lvl3 = None
-                            last_lvl1 = current_lvl1
-                            lvl1_filled = False
-                            lvl2_filled = False
-                            in_lvl2 = False
-                            in_lvl3 = False
-                            lvl1_to_fill = current_lvl1
-                            lvl2_to_fill = current_lvl2 if current_lvl2 else ""
-                            # if debug_enabled:
-                            #     print(f"DEBUG: 设置一级模块: '{current_lvl1}'")
-                            continue
-
-                    # 修改后的收集逻辑 - 关键修复
-                    if extracting:
-                        # 新增：更严格的描述收集验证
-                        def should_collect_description():
-                            """判断是否应该收集描述内容"""
-                            # 如果有三级模块样例
-                            if has_lvl3_sample:
-                                # 只有在三级模块下才收集
-                                return in_lvl3
-                            else:
-                                # 没有三级模块样例时
-                                if in_lvl2:
-                                    return True
-                                # elif current_lvl1 and not current_lvl2:
-                                #    return True
-                                return False
-                        
-                        # 只有在应该收集的情况下才添加描述
-                        if should_collect_description():
-                            # 额外验证：确保不是模块标题行
-                            if not (lvl1_regex and lvl1_regex.match(text)) and \
-                               not (lvl2_regex and lvl2_regex.match(text)) and \
-                               not (lvl3_regex and lvl3_regex.match(text)):
-                                desc_lines.append(raw_text.strip())
-                        else:
-                            pass
-
-        # 补充最后一组
-        if in_lvl3 and desc_lines:
-            results.append({
-                "一级模块名称": lvl1_to_fill,
-                "二级模块名称": lvl2_to_fill,
-                "三级模块名称": last_lvl3,
-                "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                "合同描述": "",
-                "来源文件": os.path.basename(pdf_path),
-                # "页码": page_count
-            })
-        elif desc_lines:  # 如果没有三级模块但有描述内容
-            # 确保有正确的二级模块名称
-            final_lvl2 = last_lvl2 if last_lvl2 else current_lvl2 if current_lvl2 else lvl2_to_fill
-            results.append({
-                "一级模块名称": current_lvl1 if current_lvl1 else lvl1_to_fill,
-                "二级模块名称": final_lvl2,
-                "三级模块名称": "",
-                "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                "合同描述": "",
-                "来源文件": os.path.basename(pdf_path),
-                # "页码": page_count
-            })
-
-        # 清理数据 - 暂时注释掉
-        # results = self._clean_extracted_data(results)
-        results = [r for r in results if any([r["一级模块名称"], r["二级模块名称"], r["三级模块名称"], r["标书描述"]])]
-        print(f"最终提取到 {len(results)} 条内容")
-        return results
-
-    # ----------- Word 合同（修复版，处理表格分割问题） -----------
-    def extract_tables_from_word_contract(self, docx_path: str) -> List[Dict]:
-        data = []
-        found_quotation_section = False
-        current_headers = None
-        doc = Document(docx_path)
-        
-        # 先检查整个文档是否包含分项报价表
-        has_quotation_table = False
-        for para in doc.paragraphs:
-            if "分项报价表" in para.text:
-                has_quotation_table = True
-                break
-        
-        if not has_quotation_table:
-            return data
-        
-        # 处理所有表格
-        for table_idx, table in enumerate(doc.tables):
-            rows = list(table.rows)
-            if not rows:
-                continue
-            
-            # 检查表头
-            headers = [cell.text.strip().replace('\n', '') for cell in rows[0].cells]
-            
-            # 检查是否是目标表格（使用自定义表头或默认表头）
-            if self._is_target_table_custom(headers):
-                current_headers = headers
-                found_quotation_section = True
-                start_row = 1
-                print(f"✅ 找到匹配的表格，表头：{headers}")
-            elif current_headers and found_quotation_section:
-                start_row = 0
-            else:
-                continue
-                
-            # 处理数据行
-            for row_idx, row in enumerate(rows[start_row:], start=start_row):
-                row_data = {}
-                cells = row.cells
-                
-                # 处理合并单元格的情况
-                for idx, header in enumerate(current_headers):
-                    if idx < len(cells):
-                        cell_text = cells[idx].text.strip()
-                        row_data[header] = cell_text
-                    else:
-                        row_data[header] = ''
-                
-                # 检查是否有有效数据
-                has_data = False
-                
-                # 检查序号字段
-                for header in current_headers:
-                    if '序号' in header and row_data.get(header, '').strip():
-                        # 如果序号是数字，认为有效
-                        try:
-                            int(row_data[header])
-                            has_data = True
-                            break
-                        except ValueError:
-                            # 如果不是数字，检查其他字段
-                            pass
-                
-                # 如果序号不是数字，检查其他关键字段
-                if not has_data:
-                    # 使用自定义表头或默认表头进行检查
-                    key_fields = self._get_key_fields_for_check()
-                    for field in key_fields:
-                        for header in current_headers:
-                            if field in header and row_data.get(header, '').strip():
-                                has_data = True
-                                break
-                        if has_data:
-                            break
-                
-                # 如果关键字段都没有，再检查其他字段
-                if not has_data:
-                    has_data = any(row_data.get(header, '').strip() for header in current_headers)
-                
-                # 添加调试信息
-                if has_data:
-                    mapped = self._map_word_row_custom(row_data, docx_path)
-                    
-                    # 新增：检查重复并处理
-                    if len(data) > 0:
-                        # 查找上一个非空的一级模块名称
-                        last_lvl1 = ""
-                        last_lvl2 = ""
-                        for i in range(len(data) - 1, -1, -1):
-                            if data[i]['一级模块名称'].strip():
-                                last_lvl1 = data[i]['一级模块名称']
-                                break
-                        for i in range(len(data) - 1, -1, -1):
-                            if data[i]['二级模块名称'].strip():
-                                last_lvl2 = data[i]['二级模块名称']
-                                break
-                        
-                        # 检查一级模块名称是否重复
-                        if mapped['一级模块名称'] == last_lvl1 and mapped['一级模块名称']:
-                            mapped['一级模块名称'] = ''
-                        # 检查二级模块名称是否重复
-                        if mapped['二级模块名称'] == last_lvl2 and mapped['二级模块名称']:
-                            mapped['二级模块名称'] = ''
-                    
-                    data.append(mapped)
-                else:
-                    pass
-        
-        return data
-
-    def extract_tables_from_word_bid(self, docx_path: str) -> List[Dict]:
-        """提取Word标书文件中的表格"""
-        # 标书文件使用默认的映射逻辑
-        data = []
-        found_quotation_section = False
-        current_headers = None
-        doc = Document(docx_path)
-        
-        # 先检查整个文档是否包含分项报价表
-        has_quotation_table = False
-        for para in doc.paragraphs:
-            if "分项报价表" in para.text:
-                has_quotation_table = True
-                break
-        
-        if not has_quotation_table:
-            return data
-        
-        # 处理所有表格
-        for table_idx, table in enumerate(doc.tables):
-            rows = list(table.rows)
-            if not rows:
-                continue
-            
-            # 检查表头
-            headers = [cell.text.strip().replace('\n', '') for cell in rows[0].cells]
-            
-            # 检查是否是目标表格
-            if self._is_target_table(headers):
-                current_headers = headers
-                found_quotation_section = True
-                start_row = 1
-            elif current_headers and found_quotation_section:
-                start_row = 0
-            else:
-                continue
-            
-            # 处理数据行
-            for row_idx, row in enumerate(rows[start_row:], start=start_row):
-                row_data = {}
-                cells = row.cells
-                
-                # 处理合并单元格的情况
-                for idx, header in enumerate(current_headers):
-                    if idx < len(cells):
-                        cell_text = cells[idx].text.strip()
-                        row_data[header] = cell_text
-                    else:
-                        row_data[header] = ''
-                
-                # 检查是否有有效数据
-                has_data = False
-                
-                # 检查序号字段
-                for header in current_headers:
-                    if '序号' in header and row_data.get(header, '').strip():
-                        # 如果序号是数字，认为有效
-                        try:
-                            int(row_data[header])
-                            has_data = True
-                            break
-                        except ValueError:
-                            # 如果不是数字，检查其他字段
-                            pass
-                
-                # 如果序号不是数字，检查其他关键字段
-                if not has_data:
-                    key_fields = ['功能描述', '三级模块', '功能模块', '功能子项']
-                    for field in key_fields:
-                        for header in current_headers:
-                            if field in header and row_data.get(header, '').strip():
-                                has_data = True
-                                break
-                        if has_data:
-                            break
-                
-                # 如果关键字段都没有，再检查其他字段
-                if not has_data:
-                    has_data = any(row_data.get(header, '').strip() for header in current_headers)
-                
-                # 添加调试信息
-                if has_data:
-                    mapped = self._map_word_row(row_data, docx_path)
-                    data.append(mapped)
-                else:
-                    pass
-        
-        return data
-
+        """提取PDF标书文件中的表格（命令行版本）"""
+        # 这个方法在Web应用中不会被使用，返回空列表
+        return []
+    
     def extract_tables_from_pdf_contract(self, pdf_path: str) -> List[Dict]:
         """提取PDF合同文件中的表格"""
         # PDF合同文件暂时使用标书的提取逻辑
@@ -1562,107 +702,473 @@ class PDFWordTableExtractor:
         logger.info(f"Excel文件已保存到: {unique_output_path}")
         return unique_output_path
 
-def main():
-    extractor = PDFWordTableExtractor()
-    files = [
-        "标书.PDF",
-        "合同.pdf",
-        "标书.docx",
-        "合同.docx"
-    ]
-    all_data = []
-    
-    # 获取唯一的输出文件名（在开始时就确定）
-    base_output_file = "分项报价表提取结果.xlsx"
-    
-    # 获取唯一的输出文件名
-    def get_unique_filename(filepath):
-        if not os.path.exists(filepath):
-            return filepath
-        directory = os.path.dirname(filepath)
-        filename = os.path.basename(filepath)
-        name, ext = os.path.splitext(filename)
-        counter = 1
-        while True:
-            new_filename = f"{name}_{counter}{ext}"
-            new_filepath = os.path.join(directory, new_filename)
-            if not os.path.exists(new_filepath):
-                return new_filepath
-            counter += 1
-    
-    output_file = get_unique_filename(base_output_file)
-    
-    # 处理标书文件
-    bid_files = [f for f in files if "标书" in f and os.path.exists(f)]
-    contract_files = [f for f in files if "合同" in f and os.path.exists(f)]
-    
-    # 标书提取循环
-    for bid_file in bid_files:
-        ext = os.path.splitext(bid_file)[1].lower()
-        file_type = "pdf" if ext == ".pdf" else "docx" if ext == ".docx" else None
-        if not file_type:
-            continue
-            
-        logger.info(f"正在处理标书文件: {bid_file}")
+    def extract_tables_with_samples(self, file_path: str, file_type: str, lvl1_sample: str, 
+                                   lvl2_sample: str = "", lvl3_sample: str = "", end_sample: str = "") -> List[Dict]:
+        """使用编号样例提取表格（Web版本）"""
         
-        while True:
-            # 提取标书数据
-            bid_data = extractor.extract_tables(bid_file, file_type)
-            
-            if bid_data:
-                print(f"\n📊 当前提取到 {len(bid_data)} 条标书记录")
-                
-                all_data.extend(bid_data)  # 添加到总数据
-                print(f"📊 有效数据: {len(bid_data)} 条")
-                
-                # 询问是否继续提取
-                while True:
-                    choice = input("\n是否继续提取标书？(y/n): ").strip().lower()
-                    if choice in ['y', 'n']:
-                        break
-                    print("请输入 y 或 n")
-                
-                if choice == 'n':
-                    break
-                else:
-                    print("\n请重新输入编号样例进行下一轮提取...")
-                    continue
+        if file_type == "pdf":
+            if "合同" in file_path:
+                return self.extract_tables_from_pdf_contract_with_samples(file_path, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
             else:
-                print(f"\n❌ 在文件 {bid_file} 中未找到分项报价表")
-                break
-    
-    # 处理合同文件
-    for contract_file in contract_files:
-        ext = os.path.splitext(contract_file)[1].lower()
-        file_type = "pdf" if ext == ".pdf" else "docx" if ext == ".docx" else None
-        if not file_type:
-            continue
-            
-        logger.info(f"正在处理合同文件: {contract_file}")
-        
-        # 对于Word合同文件，提示用户设置表头
-        if file_type == "docx" and "合同" in contract_file:
-            print(f"\n📋 即将处理Word合同文件: {contract_file}")
-            print("请根据Word文档中的实际表头设置字段映射...")
-        
-        contract_data = extractor.extract_tables(contract_file, file_type)
-        if contract_data:
-            all_data.extend(contract_data)
-            print(f"\n📊 合同文件提取到 {len(contract_data)} 条记录")
-    
-    # 保存所有数据到一个Excel文件
-    if all_data:
-        actual_output_file = extractor.create_excel_output(all_data, output_file, append_mode=False)
-        if actual_output_file:
-            print(f"\n✅ 提取完成！共提取 {len(all_data)} 条记录")
-            print(f"📁 结果文件：{actual_output_file}")
+                return self.extract_tables_from_pdf_bid_with_samples(file_path, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+        elif file_type == "docx":
+            if "合同" in file_path:
+                return self.extract_tables_from_word_contract(file_path)
+            else:
+                return self.extract_tables_from_word_bid(file_path)
         else:
-            print("\n❌ 保存文件失败")
-    else:
-        print("\n❌ 未找到分项报价表，请检查：")
-        print("1. 文件是否包含'分项报价表'字样")
-        print("2. 表格是否包含'功能模块'、'功能子项'、'三级模块'等列")
-        print("3. 对于Word合同文件，请检查表头设置是否正确")
+            print(f"暂不支持的文件类型: {file_path}")
+            return []
+
+    def extract_tables_from_pdf_bid_with_samples(self, pdf_path: str, lvl1_sample: str, 
+                                               lvl2_sample: str = "", lvl3_sample: str = "", 
+                                               end_sample: str = "") -> List[Dict]:
+        """使用编号样例提取PDF标书（Web版本）"""
+        
+        # 清空之前的状态变量
+        def clear_previous_state():
+            self.previous_lvl1_sample = None
+            self.previous_lvl2_sample = None
+            self.previous_lvl3_sample = None
+            self.previous_end_sample = None
+            self.previous_lvl1_regex = None
+            self.previous_lvl2_regex = None
+            self.previous_lvl3_regex = None
+            self.previous_end_regex = None
+        
+        clear_previous_state()
+        
+        # 重新分类模块层级
+        def reclassify_module(text, current_level):
+            if current_level == 3 and has_lvl3_sample:
+                if lvl2_regex and lvl2_regex.match(text):
+                    return 2
+                elif lvl1_regex and lvl1_regex.match(text):
+                    return 1
+            elif current_level == 2 and not has_lvl3_sample:
+                if lvl1_regex and lvl1_regex.match(text):
+                    return 1
+            return current_level
+        
+        # 判断是否启用重新核验
+        def should_enable_verification():
+            if not lvl1_sample or not lvl2_sample:
+                return False
+            
+            lvl1_len = len(lvl1_sample)
+            lvl2_len = len(lvl2_sample)
+            
+            lvl1_dots = lvl1_sample.count('.')
+            lvl2_dots = lvl2_sample.count('.')
+            
+            if lvl2_dots > lvl1_dots:
+                return True
+            
+            if lvl2_len < lvl1_len:
+                return True
+            
+            return False
+        
+        # 添加页码过滤函数
+        def is_page_number(text):
+            page_patterns = [
+                r'^第\d+页$',
+                r'^Page\s*\d+$',
+                r'^-\s*\d+\s*-$',
+            ]
+            if re.match(r'^\d+$', text.strip()):
+                if len(text.strip()) <= 3:
+                    return True
+            return any(re.match(pattern, text.strip()) for pattern in page_patterns)
+        
+        # 使用传入的编号样例
+        lvl1_regex_info = get_fuzzy_regex_from_sample(lvl1_sample) if lvl1_sample else None
+        lvl2_regex_info = get_fuzzy_regex_from_sample(lvl2_sample) if lvl2_sample else None
+        lvl3_regex_info = get_fuzzy_regex_from_sample(lvl3_sample) if lvl3_sample else None
+        end_regex_info = get_fuzzy_regex_from_sample(end_sample) if end_sample else None
+
+        lvl1_regex = lvl1_regex_info['regex'] if lvl1_regex_info else None
+        lvl2_regex = lvl2_regex_info['regex'] if lvl2_regex_info else None
+        lvl3_regex = lvl3_regex_info['regex'] if lvl3_regex_info else None
+        end_regex = end_regex_info['regex'] if end_regex_info else None
+
+        results = []
+        current_lvl1 = current_lvl2 = current_lvl3 = None
+        last_lvl1 = last_lvl2 = last_lvl3 = None
+        desc_lines = []
+        extracting = False
+        start_found = False
+        in_lvl3 = False
+        in_lvl2 = False
+
+        lvl1_filled = False
+        lvl2_filled = False
+        lvl1_to_fill = ""
+        lvl2_to_fill = ""
+
+        has_lvl3_sample = bool(lvl3_sample)
+        page_count = 0
+        line_count = 0
+
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                page_num = page.page_number if hasattr(page, 'page_number') else pdf.pages.index(page)
+                page_count += 1
+                
+                lines = (page.extract_text() or '').split('\n')
+                for i, raw_text in enumerate(lines):
+                    line_count += 1
+                    text = re.sub(r'[\s\u3000]', '', raw_text)
+
+                    # 终止编号判断
+                    if end_regex and end_regex.match(text):
+                        is_match, match_type, actual_digits = smart_start_match(end_sample, text, end_regex)
+                        if is_match:
+                            extracting = False
+                            in_lvl3 = False
+                            in_lvl2 = False
+                            continue
+
+                    # 智能起始编号判断
+                    if not extracting and lvl1_sample and lvl1_regex and lvl1_regex.match(text):
+                        is_match, match_type, actual_digits = smart_start_match(lvl1_sample, text, lvl1_regex)
+                        if is_match:
+                            extracting = True
+                            start_found = True
+                            current_lvl1 = raw_text.strip()
+                            lvl1_filled = False
+                            lvl1_to_fill = current_lvl1
+                            lvl2_to_fill = current_lvl2 if current_lvl2 else ""
+                            in_lvl2 = False
+
+                    if not extracting:
+                        continue
+
+                    # 处理三级模块
+                    m3 = lvl3_regex.match(text) if lvl3_regex else None
+                    if m3:
+                        # 验证三级模块匹配的有效性
+                        def is_valid_lvl3_match(match_obj, original_text):
+                            if not match_obj:
+                                return False
+                            number_part = match_obj.group(1)
+                            title_part = match_obj.group(2).strip()
+                            if not title_part:
+                                return False
+                            return True
+                        
+                        if not is_valid_lvl3_match(m3, raw_text.strip()):
+                            m3 = None
+                        
+                        if lvl3_regex_info and lvl3_regex_info['expected_digit_length']:
+                            text_digits = re.sub(r'[^\d]', '', m3.group(1))
+                            if len(text_digits) != lvl3_regex_info['expected_digit_length']:
+                                m3 = None
+
+                        if m3:
+                            if should_enable_verification():
+                                new_level = reclassify_module(raw_text.strip(), 3)
+                                if new_level != 3:
+                                    m3 = None
+                            
+                            if m3:
+                                if in_lvl3 and desc_lines:
+                                    results.append({
+                                        "一级模块名称": lvl1_to_fill,
+                                        "二级模块名称": lvl2_to_fill,
+                                        "三级模块名称": last_lvl3,
+                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                        "合同描述": "",
+                                        "来源文件": os.path.basename(pdf_path),
+                                    })
+                                    desc_lines = []
+                                    lvl1_filled = True
+                                    lvl2_filled = True
+
+                                number = m3.group(1)
+                                title = m3.group(2).strip()
+                                current_lvl3 = f"{number} {title}".strip()
+                                last_lvl3 = current_lvl3
+                                in_lvl3 = True
+                                in_lvl2 = False
+                                lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
+                                lvl2_to_fill = current_lvl2 if not lvl2_filled else ""
+                                continue
+
+                    # 处理二级模块
+                    m2 = lvl2_regex.match(text) if lvl2_regex else None
+                    if m2:
+                        # 验证二级模块匹配的有效性
+                        def is_valid_lvl2_match(match_obj, original_text):
+                            if not match_obj:
+                                return False
+                            number_part = match_obj.group(1)
+                            title_part = match_obj.group(2).strip()
+                            
+                            def check_lvl2_length_compatibility():
+                                if not lvl2_sample:
+                                    return True
+                                
+                                def is_simple_number_format(sample):
+                                    simple_patterns = [
+                                        r'^\d+\.$',
+                                        r'^\d+[）)]$',
+                                        r'^\d+、$',
+                                        r'^\d+】$',
+                                        r'^\d+]$',
+                                    ]
+                                    return any(re.match(pattern, sample) for pattern in simple_patterns)
+                                
+                                if not is_simple_number_format(lvl2_sample):
+                                    return True
+                                
+                                sample_digits = re.sub(r'[^\d]', '', lvl2_sample)
+                                sample_digit_length = len(sample_digits)
+                                match_digits = re.sub(r'[^\d]', '', number_part)
+                                match_digit_length = len(match_digits)
+                                
+                                if match_digit_length > sample_digit_length + 2:
+                                    return False
+                                
+                                return True
+                            
+                            if not title_part:
+                                return False
+                            
+                            if not check_lvl2_length_compatibility():
+                                return False
+                            
+                            return True
+                        
+                        if not is_valid_lvl2_match(m2, raw_text.strip()):
+                            m2 = None
+                        
+                        if lvl2_regex_info and lvl2_regex_info['expected_digit_length']:
+                            text_digits = re.sub(r'[^\d]', '', m2.group(1))
+                            if len(text_digits) != lvl2_regex_info['expected_digit_length']:
+                                m2 = None
+                        
+                        if m2:
+                            if not has_lvl3_sample and should_enable_verification():
+                                new_level = reclassify_module(raw_text.strip(), 2)
+                                if new_level != 2:
+                                    m2 = None
+                            
+                            if m2:
+                                if has_lvl3_sample:
+                                    if in_lvl3 and desc_lines:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": lvl2_to_fill,
+                                            "三级模块名称": last_lvl3,
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                        in_lvl3 = False
+                                    number = m2.group(1)
+                                    title = m2.group(2).strip()
+                                    current_lvl2 = f"{number} {title}".strip()
+                                    current_lvl3 = None
+                                    last_lvl2 = current_lvl2
+                                    lvl2_filled = False
+                                    in_lvl2 = True
+                                    in_lvl3 = False
+                                    
+                                    lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
+                                    lvl2_to_fill = current_lvl2
+                                    continue
+                                else:
+                                    if desc_lines and in_lvl2 and last_lvl2:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": last_lvl2,
+                                            "三级模块名称": "",
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                    
+                                    number = m2.group(1)
+                                    title = m2.group(2).strip()
+                                    current_lvl2 = f"{number} {title}".strip()
+                                    current_lvl3 = None
+                                    last_lvl2 = current_lvl2
+                                    lvl2_filled = False
+                                    in_lvl2 = True
+                                    in_lvl3 = False
+                                    
+                                    lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
+                                    lvl2_to_fill = current_lvl2
+
+                                    if in_lvl3 and desc_lines:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": lvl2_to_fill,
+                                            "三级模块名称": last_lvl3,
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                        in_lvl3 = False
+                                    continue
+
+                    # 处理一级模块
+                    m1 = lvl1_regex.match(text) if lvl1_regex else None
+                    if m1:
+                        # 验证一级模块匹配的有效性
+                        def is_valid_lvl1_match(match_obj, original_text):
+                            if not match_obj:
+                                return False
+                            number_part = match_obj.group(1)
+                            title_part = match_obj.group(2).strip()
+                            
+                            def check_lvl1_length_compatibility():
+                                if not lvl1_sample:
+                                    return True
+                                
+                                def is_simple_number_format(sample):
+                                    simple_patterns = [
+                                        r'^\d+\.$',
+                                        r'^\d+[）)]$',
+                                        r'^\d+、$',
+                                        r'^\d+】$',
+                                        r'^\d+]$',
+                                    ]
+                                    return any(re.match(pattern, sample) for pattern in simple_patterns)
+                                
+                                if not is_simple_number_format(lvl1_sample):
+                                    return True
+                                
+                                sample_digits = re.sub(r'[^\d]', '', lvl1_sample)
+                                sample_digit_length = len(sample_digits)
+                                match_digits = re.sub(r'[^\d]', '', number_part)
+                                match_digit_length = len(match_digits)
+                                
+                                if match_digit_length > sample_digit_length + 2:
+                                    return False
+                                
+                                return True
+                            
+                            if not title_part:
+                                return False
+                            
+                            if not check_lvl1_length_compatibility():
+                                return False
+                            
+                            return True
+                        
+                        if not is_valid_lvl1_match(m1, raw_text.strip()):
+                            m1 = None
+                        
+                        if lvl1_regex_info and lvl1_regex_info['expected_digit_length']:
+                            text_digits = re.sub(r'[^\d]', '', m1.group(1))
+                            if len(text_digits) != lvl1_regex_info['expected_digit_length']:
+                                m1 = None
+                        
+                        if m1:
+                            if has_lvl3_sample:
+                                if in_lvl3 and desc_lines:
+                                    results.append({
+                                        "一级模块名称": lvl1_to_fill,
+                                        "二级模块名称": lvl2_to_fill,
+                                        "三级模块名称": last_lvl3,
+                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                        "合同描述": "",
+                                        "来源文件": os.path.basename(pdf_path),
+                                    })
+                                    desc_lines = []
+                                    lvl1_filled = True
+                                    lvl2_filled = True
+                                    in_lvl3 = False
+                            else:
+                                if desc_lines and not in_lvl3:
+                                    results.append({
+                                        "一级模块名称": lvl1_to_fill,
+                                        "二级模块名称": lvl2_to_fill,
+                                        "三级模块名称": "",
+                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                        "合同描述": "",
+                                        "来源文件": os.path.basename(pdf_path),
+                                    })
+                                    desc_lines = []
+                                    lvl1_filled = True
+                                    lvl2_filled = True
+
+                                if in_lvl3 and desc_lines:
+                                    results.append({
+                                        "一级模块名称": lvl1_to_fill,
+                                        "二级模块名称": lvl2_to_fill,
+                                        "三级模块名称": last_lvl3,
+                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                        "合同描述": "",
+                                        "来源文件": os.path.basename(pdf_path),
+                                    })
+                                    desc_lines = []
+                                    lvl1_filled = True
+                                    lvl2_filled = True
+                                    in_lvl3 = False
+
+                            number = m1.group(1)
+                            title = m1.group(2).strip()
+                            current_lvl1 = f"{number} {title}".strip()
+                            current_lvl2 = current_lvl3 = None
+                            last_lvl1 = current_lvl1
+                            lvl1_filled = False
+                            lvl2_filled = False
+                            in_lvl2 = False
+                            in_lvl3 = False
+                            lvl1_to_fill = current_lvl1
+                            lvl2_to_fill = current_lvl2 if current_lvl2 else ""
+                            continue
+
+                    # 收集描述内容
+                    if extracting:
+                        def should_collect_description():
+                            if has_lvl3_sample:
+                                return in_lvl3
+                            else:
+                                if in_lvl2:
+                                    return True
+                                return False
+                        
+                        if should_collect_description():
+                            if not (lvl1_regex and lvl1_regex.match(text)) and \
+                               not (lvl2_regex and lvl2_regex.match(text)) and \
+                               not (lvl3_regex and lvl3_regex.match(text)):
+                                desc_lines.append(raw_text.strip())
+
+        # 补充最后一组
+        if in_lvl3 and desc_lines:
+            results.append({
+                "一级模块名称": lvl1_to_fill,
+                "二级模块名称": lvl2_to_fill,
+                "三级模块名称": last_lvl3,
+                "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                "合同描述": "",
+                "来源文件": os.path.basename(pdf_path),
+            })
+        elif desc_lines:
+            final_lvl2 = last_lvl2 if last_lvl2 else current_lvl2 if current_lvl2 else lvl2_to_fill
+            results.append({
+                "一级模块名称": current_lvl1 if current_lvl1 else lvl1_to_fill,
+                "二级模块名称": final_lvl2,
+                "三级模块名称": "",
+                "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                "合同描述": "",
+                "来源文件": os.path.basename(pdf_path),
+            })
+
+        results = [r for r in results if any([r["一级模块名称"], r["二级模块名称"], r["三级模块名称"], r["标书描述"]])]
+        return results
+
+def main():
+    """主函数（命令行版本）"""
+    # Web应用中不会调用这个函数
+    pass
 
 if __name__ == "__main__":
     main()

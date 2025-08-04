@@ -64,17 +64,52 @@ def main():
         - Word文档 (.docx)
         
         **使用说明：**
-        1. 上传包含"分项报价表"的PDF或Word文件
-        2. 系统自动识别表格结构
-        3. 点击"开始提取"进行处理
-        4. 下载Excel格式的结果文件
+        1. 输入编号样例（用于识别模块层级）
+        2. 上传包含"分项报价表"的PDF或Word文件
+        3. 系统自动识别表格结构
+        4. 点击"开始提取"进行处理
+        5. 下载Excel格式的结果文件
         """)
+    
+    st.markdown("---")
+    
+    # 编号样例输入区域
+    st.subheader("🔢 编号样例设置")
+    st.markdown("**请根据你的文档格式输入编号样例：**")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        lvl1_sample = st.text_input(
+            "一级模块编号样例",
+            placeholder="如：9.1.3.4 或 （一）",
+            help="输入文档中一级模块的编号格式"
+        )
+        
+        lvl2_sample = st.text_input(
+            "二级模块编号样例",
+            placeholder="如：9.1.3.4.1 或 （二）",
+            help="输入文档中二级模块的编号格式（可选）"
+        )
+    
+    with col2:
+        lvl3_sample = st.text_input(
+            "三级模块编号样例",
+            placeholder="如：1",
+            help="输入文档中三级模块的编号格式（可选）"
+        )
+        
+        end_sample = st.text_input(
+            "终止编号样例",
+            placeholder="如：结束 或 附录",
+            help="输入遇到该编号时停止提取（可选）"
+        )
     
     st.markdown("---")
     
     # 文件上传区域
     st.markdown('<div class="upload-area">', unsafe_allow_html=True)
-    st.markdown("### �� 文件上传")
+    st.markdown("###  文件上传")
     st.markdown("**支持拖拽上传多个文件**")
     
     uploaded_files = st.file_uploader(
@@ -96,7 +131,10 @@ def main():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("🚀 开始提取", type="primary", use_container_width=True):
-                process_files(uploaded_files)
+                if not lvl1_sample:
+                    st.error("❌ 请至少输入一级模块编号样例！")
+                else:
+                    process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
     
     else:
         st.info("👆 请上传PDF或Word文件开始提取")
@@ -110,7 +148,7 @@ def main():
         - 提取结果将保存为Excel格式
         """)
 
-def process_files(uploaded_files):
+def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample):
     """处理上传的文件"""
     extractor = PDFWordTableExtractor()
     all_data = []
@@ -132,8 +170,9 @@ def process_files(uploaded_files):
             # 确定文件类型
             file_type = "pdf" if uploaded_file.type == "application/pdf" else "docx"
             
-            # 提取数据
-            data = extractor.extract_tables(tmp_file_path, file_type)
+            # 修改：传递编号样例给提取函数
+            data = extract_tables_with_samples(extractor, tmp_file_path, file_type, 
+                                            lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
             
             if data:
                 all_data.extend(data)
@@ -201,6 +240,10 @@ def process_files(uploaded_files):
                 os.unlink('temp.xlsx')
     else:
         st.error("❌ 未提取到任何数据")
+
+def extract_tables_with_samples(extractor, file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample):
+    """使用编号样例提取表格"""
+    return extractor.extract_tables_with_samples(file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
 
 if __name__ == "__main__":
     main()
