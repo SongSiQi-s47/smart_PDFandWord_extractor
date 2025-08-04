@@ -8,7 +8,7 @@ from pdf_extractorV2_2 import PDFWordTableExtractor
 def main():
     st.set_page_config(
         page_title="智能表格提取工具",
-        page_icon="��",
+        page_icon="📋",
         layout="wide",
         initial_sidebar_state="collapsed"
     )
@@ -53,11 +53,11 @@ def main():
     with st.expander("ℹ️ 功能介绍", expanded=False):
         st.markdown("""
         **功能特点：**
-        - �� 智能识别PDF和Word文档中的表格
+        - 📄 智能识别PDF和Word文档中的表格
         - 📊 自动提取分项报价表数据
         - 🏗️ 支持多级模块结构识别
         - 📥 一键导出Excel文件
-        - �� 零安装，即开即用
+        - 🚀 零安装，即开即用
         
         **支持格式：**
         - PDF文件 (.pdf)
@@ -155,7 +155,7 @@ def main():
     
     # 文件上传区域
     st.markdown('<div class="upload-area">', unsafe_allow_html=True)
-    st.markdown("###  文件上传")
+    st.markdown("### 📁 文件上传")
     st.markdown("**支持拖拽上传多个文件**")
     
     uploaded_files = st.file_uploader(
