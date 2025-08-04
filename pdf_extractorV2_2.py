@@ -1165,6 +1165,95 @@ class PDFWordTableExtractor:
         results = [r for r in results if any([r["一级模块名称"], r["二级模块名称"], r["三级模块名称"], r["标书描述"]])]
         return results
 
+    def extract_tables_from_word_bid(self, docx_path: str) -> List[Dict]:
+        """提取Word标书文件中的表格"""
+        # 标书文件使用默认的映射逻辑
+        data = []
+        found_quotation_section = False
+        current_headers = None
+        doc = Document(docx_path)
+        
+        # 先检查整个文档是否包含分项报价表
+        has_quotation_table = False
+        for para in doc.paragraphs:
+            if "分项报价表" in para.text:
+                has_quotation_table = True
+                break
+        
+        if not has_quotation_table:
+            return data
+        
+        # 处理所有表格
+        for table_idx, table in enumerate(doc.tables):
+            rows = list(table.rows)
+            if not rows:
+                continue
+            
+            # 检查表头
+            headers = [cell.text.strip().replace('\n', '') for cell in rows[0].cells]
+            
+            # 检查是否是目标表格
+            if self._is_target_table(headers):
+                current_headers = headers
+                found_quotation_section = True
+                start_row = 1
+            elif current_headers and found_quotation_section:
+                start_row = 0
+            else:
+                continue
+            
+            # 处理数据行
+            for row_idx, row in enumerate(rows[start_row:], start=start_row):
+                row_data = {}
+                cells = row.cells
+                
+                # 处理合并单元格的情况
+                for idx, header in enumerate(current_headers):
+                    if idx < len(cells):
+                        cell_text = cells[idx].text.strip()
+                        row_data[header] = cell_text
+                    else:
+                        row_data[header] = ''
+                
+                # 检查是否有有效数据
+                has_data = False
+                
+                # 检查序号字段
+                for header in current_headers:
+                    if '序号' in header and row_data.get(header, '').strip():
+                        # 如果序号是数字，认为有效
+                        try:
+                            int(row_data[header])
+                            has_data = True
+                            break
+                        except ValueError:
+                            # 如果不是数字，检查其他字段
+                            pass
+                
+                # 如果序号不是数字，检查其他关键字段
+                if not has_data:
+                    key_fields = ['功能描述', '三级模块', '功能模块', '功能子项']
+                    for field in key_fields:
+                        for header in current_headers:
+                            if field in header and row_data.get(header, '').strip():
+                                has_data = True
+                                break
+                        if has_data:
+                            break
+                
+                # 如果关键字段都没有，再检查其他字段
+                if not has_data:
+                    has_data = any(row_data.get(header, '').strip() for header in current_headers)
+                
+                # 添加调试信息
+                if has_data:
+                    mapped = self._map_word_row(row_data, docx_path)
+                    data.append(mapped)
+                else:
+                    pass
+        
+        return data
+
 def main():
     """主函数（命令行版本）"""
     # Web应用中不会调用这个函数

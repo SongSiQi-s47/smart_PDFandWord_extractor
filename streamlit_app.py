@@ -65,10 +65,11 @@ def main():
         
         **使用说明：**
         1. 输入编号样例（用于识别模块层级）
-        2. 上传包含"分项报价表"的PDF或Word文件
-        3. 系统自动识别表格结构
-        4. 点击"开始提取"进行处理
-        5. 下载Excel格式的结果文件
+        2. 设置表头映射（Word合同文件）
+        3. 上传包含"分项报价表"的PDF或Word文件
+        4. 系统自动识别表格结构
+        5. 点击"开始提取"进行处理
+        6. 下载Excel格式的结果文件
         """)
     
     st.markdown("---")
@@ -107,6 +108,51 @@ def main():
     
     st.markdown("---")
     
+    # 表头设置区域（仅对Word合同文件显示）
+    st.subheader("📋 表头设置（Word合同文件）")
+    st.markdown("**如果处理Word合同文件，请设置表头映射：**")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        lvl1_header = st.text_input(
+            "一级模块名称对应表头",
+            placeholder="如：功能模块、模块名称等",
+            help="Word文档中对应一级模块名称的列标题"
+        )
+        
+        lvl2_header = st.text_input(
+            "二级模块名称对应表头",
+            placeholder="如：功能子项、子模块等",
+            help="Word文档中对应二级模块名称的列标题"
+        )
+    
+    with col2:
+        lvl3_header = st.text_input(
+            "三级模块名称对应表头",
+            placeholder="如：三级模块、子项等",
+            help="Word文档中对应三级模块名称的列标题"
+        )
+        
+        desc_header = st.text_input(
+            "合同描述对应表头",
+            placeholder="如：功能描述、描述、备注等",
+            help="Word文档中对应合同描述的列标题"
+        )
+    
+    # 创建表头映射
+    custom_headers = {}
+    if lvl1_header:
+        custom_headers[lvl1_header] = '一级模块名称'
+    if lvl2_header:
+        custom_headers[lvl2_header] = '二级模块名称'
+    if lvl3_header:
+        custom_headers[lvl3_header] = '三级模块名称'
+    if desc_header:
+        custom_headers[desc_header] = '合同描述'
+    
+    st.markdown("---")
+    
     # 文件上传区域
     st.markdown('<div class="upload-area">', unsafe_allow_html=True)
     st.markdown("###  文件上传")
@@ -134,7 +180,7 @@ def main():
                 if not lvl1_sample:
                     st.error("❌ 请至少输入一级模块编号样例！")
                 else:
-                    process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+                    process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample, custom_headers)
     
     else:
         st.info("👆 请上传PDF或Word文件开始提取")
@@ -148,9 +194,14 @@ def main():
         - 提取结果将保存为Excel格式
         """)
 
-def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample):
+def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample, custom_headers=None):
     """处理上传的文件"""
     extractor = PDFWordTableExtractor()
+    
+    # 设置自定义表头
+    if custom_headers:
+        extractor.custom_headers = custom_headers
+    
     all_data = []
     
     # 创建进度条
@@ -296,7 +347,16 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
 
 def extract_tables_with_samples(extractor, file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample):
     """使用编号样例提取表格"""
-    return extractor.extract_tables_with_samples(file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+    if file_type == "pdf":
+        return extractor.extract_tables_with_samples(file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+    elif file_type == "docx":
+        # Word文件使用原有的提取方法
+        if "合同" in file_path:
+            return extractor.extract_tables_from_word_contract(file_path)
+        else:
+            return extractor.extract_tables_from_word_bid(file_path)
+    else:
+        return []
 
 if __name__ == "__main__":
     main()
