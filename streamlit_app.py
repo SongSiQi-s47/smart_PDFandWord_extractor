@@ -122,8 +122,9 @@ def process_files(uploaded_files):
     for i, uploaded_file in enumerate(uploaded_files):
         status_text.text(f"正在处理: {uploaded_file.name}")
         
-        # 保存临时文件
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.type}") as tmp_file:
+        # 修改这里：使用正确的文件扩展名
+        file_extension = os.path.splitext(uploaded_file.name)[1]  # 获取 .pdf 或 .docx
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
             tmp_file.write(uploaded_file.getvalue())
             tmp_file_path = tmp_file.name
         
