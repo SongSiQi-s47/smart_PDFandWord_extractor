@@ -263,7 +263,7 @@ class PDFWordTableExtractor:
             lvl1_value = mapped_data.get('一级模块名称', '')
             lvl2_value = mapped_data.get('二级模块名称', '')
             lvl3_value = mapped_data.get('三级模块名称', '')
-            desc_value = mapped_data.get('功能描述', mapped_data.get('合同描述', ''))
+            desc_value = mapped_data.get('合同描述', '')
             
             # 新增：数据清洗函数
             def clean_module_name(text):
@@ -289,11 +289,9 @@ class PDFWordTableExtractor:
                 '一级模块名称': lvl1_cleaned if lvl1_cleaned else '',
                 '二级模块名称': lvl2_cleaned if lvl2_cleaned else '',
                 '三级模块名称': lvl3_cleaned if lvl3_cleaned else '',
-                '功能描述': desc_cleaned if desc_cleaned else '',  # 支持功能描述和合同描述
                 '标书描述': '',
-                '合同描述': clean_module_name(mapped_data.get('合同描述', '')),
+                '合同描述': desc_cleaned if desc_cleaned else '',
                 '来源文件': os.path.basename(source_file),
-                # '页码': 'Word文档'
             }
         else:
             # 使用默认映射
@@ -375,17 +373,15 @@ class PDFWordTableExtractor:
             '一级模块名称': mapped_data.get('功能模块', ''),
             '二级模块名称': mapped_data.get('功能子项', ''),
             '三级模块名称': mapped_data.get('三级模块', ''),
-            '功能描述': mapped_data.get('功能描述', ''),
             '标书描述': '',
             '合同描述': '',
             '来源文件': os.path.basename(source_file),
-            # '页码': 'Word文档'
         }
         
         if "标书" in source_file:
-            mapped['标书描述'] = mapped['功能描述']
+            mapped['标书描述'] = mapped_data.get('功能描述', '')
         elif "合同" in source_file:
-            mapped['合同描述'] = mapped['功能描述']
+            mapped['合同描述'] = mapped_data.get('功能描述', '')
         return mapped
 
     def _merge_paragraphs(self, desc_lines):
@@ -426,7 +422,7 @@ class PDFWordTableExtractor:
             
             # 只保留有效数据
             if any([cleaned_item.get("一级模块名称"), cleaned_item.get("二级模块名称"), 
-                   cleaned_item.get("三级模块名称"), cleaned_item.get("标书描述")]):
+                   cleaned_item.get("三级模块名称"), cleaned_item.get("标书描述"), cleaned_item.get("合同描述")]):
                 cleaned_data.append(cleaned_item)
         
         return cleaned_data
@@ -578,7 +574,7 @@ class PDFWordTableExtractor:
             has_segmentation = False
             segments_data = {}
             
-            for key in ['标书描述', '合同描述', '功能描述']:
+            for key in ['标书描述', '合同描述']:
                 if key in cleaned_row and cleaned_row[key]:
                     segments = split_long_description(cleaned_row[key])
                     if len(segments) > 1:
@@ -594,7 +590,7 @@ class PDFWordTableExtractor:
                     new_row = cleaned_row.copy()
                     
                     # 处理每个描述字段
-                    for key in ['标书描述', '合同描述', '功能描述']:
+                    for key in ['标书描述', '合同描述']:
                         if key in segments_data:
                             if i < len(segments_data[key]):
                                 new_row[key] = segments_data[key][i]
@@ -616,12 +612,12 @@ class PDFWordTableExtractor:
         df = pd.DataFrame(cleaned_data)
         
         # 确保所有必需的列都存在
-        required_columns = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件', '页码']
+        required_columns = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
         for col in required_columns:
             if col not in df.columns:
                 df[col] = ''  # 添加缺失的列，填充空字符串
         
-        column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件', '页码']
+        column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
         df = df[column_order]
         
         # 追加模式处理
@@ -649,7 +645,7 @@ class PDFWordTableExtractor:
             
             # 设置列宽
             column_widths = {
-                'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10, 'G': 10
+                'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
             }
             for col, width in column_widths.items():
                 worksheet.column_dimensions[col].width = width
@@ -1014,8 +1010,7 @@ class PDFWordTableExtractor:
                                         lvl1_filled = True
                                         lvl2_filled = True
                                         in_lvl3 = False
-                                continue  # 修复：这个continue应该和上面的if m2:对齐
-                    continue
+                                    continue
 
                     # 处理一级模块
                     m1 = lvl1_regex.match(text) if lvl1_regex else None
@@ -1166,6 +1161,124 @@ class PDFWordTableExtractor:
         results = [r for r in results if any([r["一级模块名称"], r["二级模块名称"], r["三级模块名称"], r["标书描述"]])]
         return results
 
+    def extract_tables_from_pdf_contract_with_samples(self, pdf_path: str, lvl1_sample: str, 
+                                                    lvl2_sample: str = "", lvl3_sample: str = "", 
+                                                    end_sample: str = "") -> List[Dict]:
+        """使用编号样例提取PDF合同文件中的表格"""
+        # PDF合同文件暂时使用标书的提取逻辑
+        return self.extract_tables_from_pdf_bid_with_samples(pdf_path, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+
+    def extract_tables_from_word_contract(self, docx_path: str) -> List[Dict]:
+        """提取Word合同文件中的表格"""
+        data = []
+        found_quotation_section = False
+        current_headers = None
+        doc = Document(docx_path)
+        
+        # 先检查整个文档是否包含分项报价表
+        has_quotation_table = False
+        for para in doc.paragraphs:
+            if "分项报价表" in para.text:
+                has_quotation_table = True
+                break
+        
+        if not has_quotation_table:
+            return data
+        
+        # 处理所有表格
+        for table_idx, table in enumerate(doc.tables):
+            rows = list(table.rows)
+            if not rows:
+                continue
+            
+            # 检查表头
+            headers = [cell.text.strip().replace('\n', '') for cell in rows[0].cells]
+            
+            # 检查是否是目标表格（使用自定义表头或默认表头）
+            if self._is_target_table_custom(headers):
+                current_headers = headers
+                found_quotation_section = True
+                start_row = 1
+            elif current_headers and found_quotation_section:
+                start_row = 0
+            else:
+                continue
+                
+            # 处理数据行
+            for row_idx, row in enumerate(rows[start_row:], start=start_row):
+                row_data = {}
+                cells = row.cells
+                
+                # 处理合并单元格的情况
+                for idx, header in enumerate(current_headers):
+                    if idx < len(cells):
+                        cell_text = cells[idx].text.strip()
+                        row_data[header] = cell_text
+                    else:
+                        row_data[header] = ''
+                
+                # 检查是否有有效数据
+                has_data = False
+                
+                # 检查序号字段
+                for header in current_headers:
+                    if '序号' in header and row_data.get(header, '').strip():
+                        # 如果序号是数字，认为有效
+                        try:
+                            int(row_data[header])
+                            has_data = True
+                            break
+                        except ValueError:
+                            # 如果不是数字，检查其他字段
+                            pass
+                
+                # 如果序号不是数字，检查其他关键字段
+                if not has_data:
+                    # 使用自定义表头或默认表头进行检查
+                    key_fields = self._get_key_fields_for_check()
+                    for field in key_fields:
+                        for header in current_headers:
+                            if field in header and row_data.get(header, '').strip():
+                                has_data = True
+                                break
+                        if has_data:
+                            break
+                
+                # 如果关键字段都没有，再检查其他字段
+                if not has_data:
+                    has_data = any(row_data.get(header, '').strip() for header in current_headers)
+                
+                # 添加调试信息
+                if has_data:
+                    mapped = self._map_word_row_custom(row_data, docx_path)
+                    
+                    # 新增：检查重复并处理
+                    if len(data) > 0:
+                        # 查找上一个非空的一级模块名称
+                        last_lvl1 = ""
+                        last_lvl2 = ""
+                        for i in range(len(data) - 1, -1, -1):
+                            if data[i]['一级模块名称'].strip():
+                                last_lvl1 = data[i]['一级模块名称']
+                                break
+                        for i in range(len(data) - 1, -1, -1):
+                            if data[i]['二级模块名称'].strip():
+                                last_lvl2 = data[i]['二级模块名称']
+                                break
+                        
+                        # 检查一级模块名称是否重复
+                        if mapped['一级模块名称'] == last_lvl1 and mapped['一级模块名称']:
+                            mapped['一级模块名称'] = ''
+                        # 检查二级模块名称是否重复
+                        if mapped['二级模块名称'] == last_lvl2 and mapped['二级模块名称']:
+                            mapped['二级模块名称'] = ''
+                    
+                    data.append(mapped)
+                else:
+                    pass
+        
+        return data
+
     def extract_tables_from_word_bid(self, docx_path: str) -> List[Dict]:
         """提取Word标书文件中的表格"""
         # 标书文件使用默认的映射逻辑
@@ -1180,7 +1293,7 @@ class PDFWordTableExtractor:
             if "分项报价表" in para.text:
                 has_quotation_table = True
                 break
-
+        
         if not has_quotation_table:
             return data
         
@@ -1188,7 +1301,7 @@ class PDFWordTableExtractor:
         for table_idx, table in enumerate(doc.tables):
             rows = list(table.rows)
             if not rows:
-                continue  # 修复：正确的缩进
+                continue
             
             # 检查表头
             headers = [cell.text.strip().replace('\n', '') for cell in rows[0].cells]
@@ -1213,7 +1326,7 @@ class PDFWordTableExtractor:
                     if idx < len(cells):
                         cell_text = cells[idx].text.strip()
                         row_data[header] = cell_text
-                    else:  # 修复：正确的缩进
+                    else:
                         row_data[header] = ''
                 
                 # 检查是否有有效数据

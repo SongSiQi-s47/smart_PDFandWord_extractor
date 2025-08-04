@@ -282,8 +282,9 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 worksheet = writer.sheets['提取结果']
                 
                 # 设置列宽
+                column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
                 column_widths = {
-                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10, 'G': 10
+                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
                 }
                 for col, width in column_widths.items():
                     worksheet.column_dimensions[col].width = width
@@ -291,7 +292,7 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 # 设置表头样式
                 header_font = Font(bold=True, size=12)
                 header_alignment = Alignment(horizontal='center', vertical='center')
-                for col in range(1, len(df.columns) + 1):
+                for col in range(1, len(column_order) + 1):
                     cell = worksheet.cell(row=1, column=col)
                     cell.font = header_font
                     cell.alignment = header_alignment
@@ -301,7 +302,7 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 for row in range(2, len(df) + 2):
                     # 计算每行最大字符数
                     max_chars = 0
-                    for col in range(1, len(df.columns) + 1):
+                    for col in range(1, len(column_order) + 1):
                         cell_value = str(worksheet.cell(row=row, column=col).value or '')
                         lines = cell_value.split('\n')
                         for line in lines:
@@ -318,7 +319,7 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                     worksheet.row_dimensions[row].height = row_height
                     
                     # 设置单元格对齐方式
-                    for col in range(1, len(df.columns) + 1):
+                    for col in range(1, len(column_order) + 1):
                         cell = worksheet.cell(row=row, column=col)
                         cell.alignment = data_alignment
                 
@@ -329,7 +330,7 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                     top=Side(style='thin'),
                     bottom=Side(style='thin')
                 )
-                for row in worksheet.iter_rows(min_row=1, max_row=len(df) + 1, min_col=1, max_col=len(df.columns)):
+                for row in worksheet.iter_rows(min_row=1, max_row=len(df) + 1, min_col=1, max_col=len(column_order)):
                     for cell in row:
                         cell.border = thin_border
             
