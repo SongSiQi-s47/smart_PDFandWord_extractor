@@ -259,38 +259,15 @@ class PDFWordTableExtractor:
                         mapped_data[standard_field] = value
                         break
             
-            # 新增：检查是否有实际内容，避免重复
-            lvl1_value = mapped_data.get('一级模块名称', '')
-            lvl2_value = mapped_data.get('二级模块名称', '')
-            lvl3_value = mapped_data.get('三级模块名称', '')
-            desc_value = mapped_data.get('合同描述', '')  # 直接获取合同描述
+            # 确保Word合同内容映射到"合同描述"
+            desc_value = mapped_data.get('合同描述', '')
             
-            # 新增：数据清洗函数
-            def clean_module_name(text):
-                """清洗模块名称，去除多余空格和换行符"""
-                if not text:
-                    return ''
-                # 去除换行符、制表符等
-                cleaned = text.replace('\n', '').replace('\r', '').replace('\t', '')
-                # 去除多余空格（包括全角空格）
-                cleaned = re.sub(r'\s+', ' ', cleaned)
-                # 去除首尾空格
-                cleaned = cleaned.strip()
-                return cleaned
-            
-            # 清洗各级模块名称
-            lvl1_cleaned = clean_module_name(lvl1_value)
-            lvl2_cleaned = clean_module_name(lvl2_value)
-            lvl3_cleaned = clean_module_name(lvl3_value)
-            desc_cleaned = clean_module_name(desc_value)
-            
-            # 只有当有实际内容时才填充，否则留空
             mapped = {
-                '一级模块名称': lvl1_cleaned if lvl1_cleaned else '',
-                '二级模块名称': lvl2_cleaned if lvl2_cleaned else '',
-                '三级模块名称': lvl3_cleaned if lvl3_cleaned else '',
+                '一级模块名称': mapped_data.get('一级模块名称', ''),
+                '二级模块名称': mapped_data.get('二级模块名称', ''),
+                '三级模块名称': mapped_data.get('三级模块名称', ''),
                 '标书描述': '',  # Word合同文件，标书描述为空
-                '合同描述': desc_cleaned if desc_cleaned else '',  # Word合同内容放这里
+                '合同描述': desc_value,  # Word合同内容放这里
                 '来源文件': os.path.basename(source_file),
             }
         else:
@@ -723,6 +700,7 @@ class PDFWordTableExtractor:
         
         # 清空之前的状态变量
         def clear_previous_state():
+            """清空之前的提取状态"""
             self.previous_lvl1_sample = None
             self.previous_lvl2_sample = None
             self.previous_lvl3_sample = None
@@ -732,10 +710,12 @@ class PDFWordTableExtractor:
             self.previous_lvl3_regex = None
             self.previous_end_regex = None
         
+        # 调用状态清空
         clear_previous_state()
         
         # 重新分类模块层级
         def reclassify_module(text, current_level):
+            """重新分类模块层级"""
             if current_level == 3 and has_lvl3_sample:
                 if lvl2_regex and lvl2_regex.match(text):
                     return 2
@@ -748,6 +728,7 @@ class PDFWordTableExtractor:
         
         # 判断是否启用重新核验
         def should_enable_verification():
+            """判断是否启用重新核验"""
             if not lvl1_sample or not lvl2_sample:
                 return False
             
@@ -767,6 +748,7 @@ class PDFWordTableExtractor:
         
         # 添加页码过滤函数
         def is_page_number(text):
+            """判断是否为页码信息"""
             page_patterns = [
                 r'^第\d+页$',
                 r'^Page\s*\d+$',
@@ -777,7 +759,10 @@ class PDFWordTableExtractor:
                     return True
             return any(re.match(pattern, text.strip()) for pattern in page_patterns)
         
-        # 使用传入的编号样例
+        # Web版本不应该在这里获取用户输入，应该通过参数传入
+        # 这个方法在web版本中不会被直接调用，而是通过extract_tables_from_pdf_bid_with_samples调用
+        return []
+
         lvl1_regex_info = get_fuzzy_regex_from_sample(lvl1_sample) if lvl1_sample else None
         lvl2_regex_info = get_fuzzy_regex_from_sample(lvl2_sample) if lvl2_sample else None
         lvl3_regex_info = get_fuzzy_regex_from_sample(lvl3_sample) if lvl3_sample else None
@@ -957,7 +942,9 @@ class PDFWordTableExtractor:
                                             "一级模块名称": lvl1_to_fill,
                                             "二级模块名称": lvl2_to_fill,
                                             "三级模块名称": last_lvl3,
-                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path),
                                         })
                                         desc_lines = []
                                         lvl1_filled = True
@@ -981,7 +968,9 @@ class PDFWordTableExtractor:
                                             "一级模块名称": lvl1_to_fill,
                                             "二级模块名称": last_lvl2,
                                             "三级模块名称": "",
-                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path),
                                         })
                                         desc_lines = []
                                         lvl1_filled = True
@@ -1004,7 +993,9 @@ class PDFWordTableExtractor:
                                             "一级模块名称": lvl1_to_fill,
                                             "二级模块名称": lvl2_to_fill,
                                             "三级模块名称": last_lvl3,
-                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip()
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path),
                                         })
                                         desc_lines = []
                                         lvl1_filled = True

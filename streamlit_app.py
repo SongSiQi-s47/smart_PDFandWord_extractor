@@ -222,8 +222,17 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             file_type = "pdf" if uploaded_file.type == "application/pdf" else "docx"
             
             # 修改：传递编号样例给提取函数
-            data = extract_tables_with_samples(extractor, tmp_file_path, file_type, 
-                                            lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+            if file_type == "pdf":
+                # PDF文件使用编号样例提取
+                if lvl1_sample:  # 确保有编号样例
+                    data = extractor.extract_tables_from_pdf_bid_with_samples(tmp_file_path, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+                else:
+                    # 如果没有编号样例，尝试自动识别
+                    data = extractor.extract_tables(tmp_file_path, file_type)
+            else:
+                # Word文件使用原有的提取方法
+                data = extract_tables_with_samples(extractor, tmp_file_path, file_type, 
+                                                lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
             
             if data:
                 all_data.extend(data)
@@ -246,8 +255,18 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
     if all_data:
         st.success(f"🎉 提取完成！共 {len(all_data)} 条记录")
         
-        # 创建DataFrame
+        # 创建DataFrame并确保列顺序正确
         df = pd.DataFrame(all_data)
+        
+        # 确保所有必需的列都存在
+        required_columns = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
+        for col in required_columns:
+            if col not in df.columns:
+                df[col] = ''  # 添加缺失的列，填充空字符串
+        
+        # 按正确顺序排列列
+        column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
+        df = df[column_order]
         
         # 显示数据预览
         st.subheader("📊 数据预览")
@@ -282,9 +301,9 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 worksheet = writer.sheets['提取结果']
                 
                 # 设置列宽
-                column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '功能描述', '标书描述', '合同描述', '来源文件']
+                column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
                 column_widths = {
-                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 45, 'G': 10
+                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
                 }
                 for col, width in column_widths.items():
                     worksheet.column_dimensions[col].width = width
