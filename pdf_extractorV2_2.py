@@ -510,32 +510,22 @@ class PDFWordTableExtractor:
     def _map_word_row_custom(self, row_data: Dict, source_file: str, original_filename: str = None) -> Dict:
         """使用自定义表头映射Word行数据"""
         if self.custom_headers:
-            # 添加调试信息
-            print(f"🔍 自定义表头映射调试:")
-            print(f"   自定义表头: {self.custom_headers}")
-            print(f"   原始行数据: {row_data}")
-            
             # 使用自定义表头映射
             mapped_data = {}
             for header, value in row_data.items():
                 for custom_header, standard_field in self.custom_headers.items():
                     if custom_header in header:
                         mapped_data[standard_field] = value
-                        print(f"   ✅ 匹配: {header} -> {standard_field} = {value}")
                         break
-            
-            print(f"   映射结果: {mapped_data}")
             
             # 确保Word合同内容映射到"合同描述"
             desc_value = mapped_data.get('合同描述', '')
             
             # 如果合同描述为空，尝试从原始数据中查找
             if not desc_value:
-                print(f"   ⚠️ 合同描述为空，尝试查找其他描述字段...")
                 for header, value in row_data.items():
                     if value.strip() and ('描述' in header or '备注' in header or '内容' in header or '功能' in header):
                         desc_value = value
-                        print(f"   ✅ 找到描述字段: {header} = {value}")
                         break
             
             mapped = {
@@ -546,8 +536,6 @@ class PDFWordTableExtractor:
                 '合同描述': desc_value,  # Word合同内容放这里
                 '来源文件': original_filename if original_filename else (os.path.basename(source_file) if not source_file.endswith('tmp') else '合同.docx'),
             }
-            
-            print(f"   最终映射: {mapped}")
         else:
             # 使用默认映射，但增强合同描述的处理
             mapped = self._map_word_row(row_data, source_file)
@@ -756,14 +744,29 @@ class PDFWordTableExtractor:
             return f"{base}_{counter}{ext}"
         
         def clean_cell_value(value):
-            """清理单元格值"""
+            """清理单元格值，移除非法字符"""
             if not value:
                 return ""
             
+            # 转换为字符串
+            value_str = str(value)
+            
+            # 移除控制字符和非法字符
+            cleaned = ''
+            for char in value_str:
+                # 只保留可打印字符和常见的中文字符
+                if char.isprintable() or '\u4e00' <= char <= '\u9fff':
+                    cleaned += char
+            
+            # 移除调试信息中的特殊字符
+            cleaned = cleaned.replace('🔍', '').replace('✅', '').replace('⚠️', '').replace('📋', '')
+            
             # 移除多余的空白字符
-            cleaned = re.sub(r'\s+', ' ', str(value).strip())
-            # 移除特殊字符
+            cleaned = re.sub(r'\s+', ' ', cleaned.strip())
+            
+            # 移除Excel不允许的特殊字符
             cleaned = re.sub(r'[^\w\s\u4e00-\u9fff.,，。！？：:()（）\-]', '', cleaned)
+            
             return cleaned
         
         # 清理数据

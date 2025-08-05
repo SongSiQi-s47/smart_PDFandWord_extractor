@@ -229,9 +229,7 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             tmp_file.write(uploaded_file.getvalue())
             tmp_file_path = tmp_file.name
         
-        # 为了调试，打印临时文件路径
-        print(f"临时文件路径: {tmp_file_path}")
-        print(f"原始文件名: {uploaded_file.name}")
+
         
         try:
             # 确定文件类型
