@@ -151,6 +151,15 @@ def main():
     if desc_header:
         custom_headers[desc_header] = '合同描述'
     
+    # 如果没有设置自定义表头，为Word合同文件提供默认映射
+    if not custom_headers:
+        custom_headers = {
+            '功能模块': '一级模块名称',
+            '功能子项': '二级模块名称', 
+            '三级模块': '三级模块名称',
+            '功能描述': '合同描述'
+        }
+    
     st.markdown("---")
     
     # 文件上传区域

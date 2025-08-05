@@ -260,15 +260,7 @@ class PDFWordTableExtractor:
                         break
             
             # 确保Word合同内容映射到"合同描述"
-            # 首先尝试从映射数据中获取合同描述
             desc_value = mapped_data.get('合同描述', '')
-            
-            # 如果没有找到合同描述，尝试从原始数据中查找功能描述
-            if not desc_value:
-                for header, value in row_data.items():
-                    if '功能描述' in header or '描述' in header or '备注' in header:
-                        desc_value = value
-                        break
             
             mapped = {
                 '一级模块名称': mapped_data.get('一级模块名称', ''),
@@ -279,8 +271,8 @@ class PDFWordTableExtractor:
                 '来源文件': os.path.basename(source_file),
             }
         else:
-            # 使用默认映射
-            mapped = self._map_word_row(row_data, source_file)
+            # 使用默认映射，但增强合同描述的处理
+            mapped = self._map_word_row_enhanced(row_data, source_file)
         
         return mapped
 
@@ -384,6 +376,56 @@ class PDFWordTableExtractor:
                         break
             
             mapped['合同描述'] = desc_value
+        return mapped
+
+    def _map_word_row_enhanced(self, row_data: Dict, source_file: str) -> Dict:
+        """增强的Word行数据映射，专门处理合同描述"""
+        # 创建标准化字段映射
+        field_mapping = {}
+        for original_field in ['功能模块', '功能子项', '三级模块', '功能描述']:
+            normalized_field = original_field.replace('\n', '').replace('\\n', '')
+            field_mapping[normalized_field] = original_field
+        
+        # 查找匹配的字段
+        mapped_data = {}
+        for header, value in row_data.items():
+            normalized_header = header.replace('\n', '').replace('\\n', '')
+            for normalized_field, original_field in field_mapping.items():
+                if normalized_field in normalized_header:
+                    mapped_data[original_field] = value
+                    break
+        
+        mapped = {
+            '一级模块名称': mapped_data.get('功能模块', ''),
+            '二级模块名称': mapped_data.get('功能子项', ''),
+            '三级模块名称': mapped_data.get('三级模块', ''),
+            '标书描述': '',
+            '合同描述': '',
+            '来源文件': os.path.basename(source_file),
+        }
+        
+        if "标书" in source_file:
+            mapped['标书描述'] = mapped_data.get('功能描述', '')
+        elif "合同" in source_file:
+            # 尝试从映射数据中获取功能描述
+            desc_value = mapped_data.get('功能描述', '')
+            
+            # 如果没有找到功能描述，尝试从原始数据中查找
+            if not desc_value:
+                for header, value in row_data.items():
+                    if '功能描述' in header or '描述' in header or '备注' in header or '内容' in header or '合同' in header:
+                        desc_value = value
+                        break
+            
+            # 如果还是没有找到，尝试获取任何非空的字段作为描述
+            if not desc_value:
+                for header, value in row_data.items():
+                    if value.strip() and header not in ['序号', '编号', '代码']:
+                        desc_value = value
+                        break
+            
+            mapped['合同描述'] = desc_value
+        
         return mapped
 
     def _merge_paragraphs(self, desc_lines):
