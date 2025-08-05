@@ -366,7 +366,24 @@ class PDFWordTableExtractor:
         if "标书" in source_file:
             mapped['标书描述'] = mapped_data.get('功能描述', '')
         elif "合同" in source_file:
-            mapped['合同描述'] = mapped_data.get('功能描述', '')
+            # 尝试从映射数据中获取功能描述
+            desc_value = mapped_data.get('功能描述', '')
+            
+            # 如果没有找到功能描述，尝试从原始数据中查找
+            if not desc_value:
+                for header, value in row_data.items():
+                    if '功能描述' in header or '描述' in header or '备注' in header or '内容' in header or '合同' in header:
+                        desc_value = value
+                        break
+            
+            # 如果还是没有找到，尝试获取任何非空的字段作为描述
+            if not desc_value:
+                for header, value in row_data.items():
+                    if value.strip() and header not in ['序号', '编号', '代码']:
+                        desc_value = value
+                        break
+            
+            mapped['合同描述'] = desc_value
         return mapped
 
     def _merge_paragraphs(self, desc_lines):
