@@ -246,8 +246,17 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                     data = extractor.extract_tables(tmp_file_path, file_type)
             else:
                 # Word文件使用原有的提取方法
+                st.info(f"处理Word文件: {uploaded_file.name}")
                 data = extract_tables_with_samples(extractor, tmp_file_path, file_type, 
                                                 lvl1_sample, lvl2_sample, lvl3_sample, end_sample, uploaded_file.name)
+                
+                # 添加调试信息
+                if data:
+                    st.info(f"提取到 {len(data)} 条记录")
+                    if len(data) > 0:
+                        st.info(f"第一条记录: {data[0]}")
+                else:
+                    st.warning("未提取到数据")
             
             if data:
                 all_data.extend(data)
@@ -403,7 +412,8 @@ def extract_tables_with_samples(extractor, file_path, file_type, lvl1_sample, lv
         return extractor.extract_tables_with_samples(file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
     elif file_type == "docx":
         # Word文件使用原有的提取方法
-        if "合同" in file_path:
+        # 根据原始文件名判断是合同还是标书
+        if original_filename and ("合同" in original_filename or "contract" in original_filename.lower()):
             return extractor.extract_tables_from_word_contract(file_path, original_filename)
         else:
             return extractor.extract_tables_from_word_bid(file_path)
