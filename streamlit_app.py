@@ -64,101 +64,11 @@ def main():
         - Word文档 (.docx)
         
         **使用说明：**
-        1. 输入编号样例（用于识别模块层级）
-        2. 设置表头映射（Word合同文件）
-        3. 上传包含"分项报价表"的PDF或Word文件
-        4. 系统自动识别表格结构
-        5. 点击"开始提取"进行处理
-        6. 下载Excel格式的结果文件
+        1. 上传包含"分项报价表"的PDF或Word文件
+        2. 系统自动识别表格结构
+        3. 点击"开始提取"进行处理
+        4. 下载Excel格式的结果文件
         """)
-    
-    st.markdown("---")
-    
-    # 编号样例输入区域
-    st.subheader("🔢 编号样例设置")
-    st.markdown("**请根据你的文档格式输入编号样例：**")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        lvl1_sample = st.text_input(
-            "一级模块编号样例",
-            placeholder="如：9.1.3.4 或 （一）",
-            help="输入文档中一级模块的编号格式"
-        )
-        
-        lvl2_sample = st.text_input(
-            "二级模块编号样例",
-            placeholder="如：9.1.3.4.1 或 （二）",
-            help="输入文档中二级模块的编号格式（可选）"
-        )
-    
-    with col2:
-        lvl3_sample = st.text_input(
-            "三级模块编号样例",
-            placeholder="如：1",
-            help="输入文档中三级模块的编号格式（可选）"
-        )
-        
-        end_sample = st.text_input(
-            "终止编号样例",
-            placeholder="如：结束 或 附录",
-            help="输入遇到该编号时停止提取（可选）"
-        )
-    
-    st.markdown("---")
-    
-    # 表头设置区域（仅对Word合同文件显示）
-    st.subheader("📋 表头设置（Word合同文件）")
-    st.markdown("**如果处理Word合同文件，请设置表头映射：**")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        lvl1_header = st.text_input(
-            "一级模块名称对应表头",
-            placeholder="如：功能模块、模块名称等",
-            help="Word文档中对应一级模块名称的列标题"
-        )
-        
-        lvl2_header = st.text_input(
-            "二级模块名称对应表头",
-            placeholder="如：功能子项、子模块等",
-            help="Word文档中对应二级模块名称的列标题"
-        )
-    
-    with col2:
-        lvl3_header = st.text_input(
-            "三级模块名称对应表头",
-            placeholder="如：三级模块、子项等",
-            help="Word文档中对应三级模块名称的列标题"
-        )
-        
-        desc_header = st.text_input(
-            "合同描述对应表头",
-            placeholder="如：功能描述、描述、备注等",
-            help="Word文档中对应合同描述的列标题"
-        )
-    
-    # 创建表头映射
-    custom_headers = {}
-    if lvl1_header:
-        custom_headers[lvl1_header] = '一级模块名称'
-    if lvl2_header:
-        custom_headers[lvl2_header] = '二级模块名称'
-    if lvl3_header:
-        custom_headers[lvl3_header] = '三级模块名称'
-    if desc_header:
-        custom_headers[desc_header] = '合同描述'
-    
-    # 如果没有设置自定义表头，为Word合同文件提供默认映射
-    if not custom_headers:
-        custom_headers = {
-            '功能模块': '一级模块名称',
-            '功能子项': '二级模块名称', 
-            '三级模块': '三级模块名称',
-            '功能描述': '合同描述'
-        }
     
     st.markdown("---")
     
@@ -186,10 +96,7 @@ def main():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("🚀 开始提取", type="primary", use_container_width=True):
-                if not lvl1_sample:
-                    st.error("❌ 请至少输入一级模块编号样例！")
-                else:
-                    process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample, custom_headers)
+                process_files(uploaded_files)
     
     else:
         st.info("👆 请上传PDF或Word文件开始提取")
@@ -203,14 +110,9 @@ def main():
         - 提取结果将保存为Excel格式
         """)
 
-def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample, custom_headers=None):
+def process_files(uploaded_files):
     """处理上传的文件"""
     extractor = PDFWordTableExtractor()
-    
-    # 设置自定义表头
-    if custom_headers:
-        extractor.custom_headers = custom_headers
-    
     all_data = []
     
     # 创建进度条
@@ -220,8 +122,8 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
     for i, uploaded_file in enumerate(uploaded_files):
         status_text.text(f"正在处理: {uploaded_file.name}")
         
-        # 修改这里：使用正确的文件扩展名
-        file_extension = os.path.splitext(uploaded_file.name)[1]  # 获取 .pdf 或 .docx
+        # 创建临时文件
+        file_extension = os.path.splitext(uploaded_file.name)[1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
             tmp_file.write(uploaded_file.getvalue())
             tmp_file_path = tmp_file.name
@@ -230,18 +132,8 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             # 确定文件类型
             file_type = "pdf" if uploaded_file.type == "application/pdf" else "docx"
             
-            # 修改：传递编号样例给提取函数
-            if file_type == "pdf":
-                # PDF文件使用编号样例提取
-                if lvl1_sample:  # 确保有编号样例
-                    data = extractor.extract_tables_from_pdf_bid_with_samples(tmp_file_path, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
-                else:
-                    # 如果没有编号样例，尝试自动识别
-                    data = extractor.extract_tables(tmp_file_path, file_type)
-            else:
-                # Word文件使用原有的提取方法
-                data = extract_tables_with_samples(extractor, tmp_file_path, file_type, 
-                                                lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
+            # 提取数据
+            data = extractor.extract_tables(tmp_file_path, file_type)
             
             if data:
                 all_data.extend(data)
@@ -298,7 +190,7 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             )
         
         with col2:
-            # Excel下载 - 添加格式化
+            # Excel下载
             from io import BytesIO
             import openpyxl
             from openpyxl.styles import Font, Alignment, Border, Side
@@ -310,7 +202,6 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 worksheet = writer.sheets['提取结果']
                 
                 # 设置列宽
-                column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
                 column_widths = {
                     'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
                 }
@@ -325,28 +216,9 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                     cell.font = header_font
                     cell.alignment = header_alignment
                 
-                # 设置数据行样式和行高
+                # 设置数据行样式
                 data_alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
                 for row in range(2, len(df) + 2):
-                    # 计算每行最大字符数
-                    max_chars = 0
-                    for col in range(1, len(column_order) + 1):
-                        cell_value = str(worksheet.cell(row=row, column=col).value or '')
-                        lines = cell_value.split('\n')
-                        for line in lines:
-                            line_chars = len(line)
-                            if line_chars > 30:
-                                needed_lines = (line_chars // 30) + 1
-                                max_chars = max(max_chars, needed_lines * 30)
-                            else:
-                                max_chars = max(max_chars, line_chars)
-                    
-                    # 计算行高
-                    estimated_lines = max(1, (max_chars // 30) + 1)
-                    row_height = max(20, estimated_lines * 18 + 10)
-                    worksheet.row_dimensions[row].height = row_height
-                    
-                    # 设置单元格对齐方式
                     for col in range(1, len(column_order) + 1):
                         cell = worksheet.cell(row=row, column=col)
                         cell.alignment = data_alignment
@@ -373,19 +245,6 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             )
     else:
         st.error("❌ 未提取到任何数据")
-
-def extract_tables_with_samples(extractor, file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample):
-    """使用编号样例提取表格"""
-    if file_type == "pdf":
-        return extractor.extract_tables_with_samples(file_path, file_type, lvl1_sample, lvl2_sample, lvl3_sample, end_sample)
-    elif file_type == "docx":
-        # Word文件使用原有的提取方法
-        if "合同" in file_path:
-            return extractor.extract_tables_from_word_contract(file_path)
-        else:
-            return extractor.extract_tables_from_word_bid(file_path)
-    else:
-        return []
 
 if __name__ == "__main__":
     main()
