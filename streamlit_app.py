@@ -346,43 +346,44 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
                 with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
                     df.to_excel(writer, sheet_name='提取结果', index=False)
                     worksheet = writer.sheets['提取结果']
+                    
+                    # 设置列宽
+                    column_widths = {
+                        'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
+                    }
+                    for col, width in column_widths.items():
+                        worksheet.column_dimensions[col].width = width
+                    
+                    # 设置表头样式
+                    header_font = Font(bold=True, size=12)
+                    header_alignment = Alignment(horizontal='center', vertical='center')
+                    for col in range(1, len(column_order) + 1):
+                        cell = worksheet.cell(row=1, column=col)
+                        cell.font = header_font
+                        cell.alignment = header_alignment
+                    
+                    # 设置数据行样式
+                    data_alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+                    for row in range(2, len(df) + 2):
+                        for col in range(1, len(column_order) + 1):
+                            cell = worksheet.cell(row=row, column=col)
+                            cell.alignment = data_alignment
+                    
+                    # 设置边框
+                    thin_border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style='thin')
+                    )
+                    for row in worksheet.iter_rows(min_row=1, max_row=len(df) + 1, min_col=1, max_col=len(column_order)):
+                        for cell in row:
+                            cell.border = thin_border
+                            
             except Exception as e:
                 st.error(f"Excel导出失败: {str(e)}")
                 st.error("请尝试下载CSV文件")
                 return
-                
-                # 设置列宽
-                column_widths = {
-                    'A': 15, 'B': 15, 'C': 15, 'D': 45, 'E': 45, 'F': 10
-                }
-                for col, width in column_widths.items():
-                    worksheet.column_dimensions[col].width = width
-                
-                # 设置表头样式
-                header_font = Font(bold=True, size=12)
-                header_alignment = Alignment(horizontal='center', vertical='center')
-                for col in range(1, len(column_order) + 1):
-                    cell = worksheet.cell(row=1, column=col)
-                    cell.font = header_font
-                    cell.alignment = header_alignment
-                
-                # 设置数据行样式
-                data_alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
-                for row in range(2, len(df) + 2):
-                    for col in range(1, len(column_order) + 1):
-                        cell = worksheet.cell(row=row, column=col)
-                        cell.alignment = data_alignment
-                
-                # 设置边框
-                thin_border = Border(
-                    left=Side(style='thin'),
-                    right=Side(style='thin'),
-                    top=Side(style='thin'),
-                    bottom=Side(style='thin')
-                )
-                for row in worksheet.iter_rows(min_row=1, max_row=len(df) + 1, min_col=1, max_col=len(column_order)):
-                    for cell in row:
-                        cell.border = thin_border
             
             excel_data = excel_buffer.getvalue()
             
