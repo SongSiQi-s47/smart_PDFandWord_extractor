@@ -90,7 +90,7 @@ class PDFWordTableExtractor:
         # 默认的目标列映射
         self.target_columns = {
             '功能模块': '一级模块名称',
-            '功能子项': '二级模块名称', 
+            '功能子项': '二级模块名称',
             '三级模块': '三级模块名称',
             '功能描述': '功能描述'
         }
@@ -104,11 +104,11 @@ class PDFWordTableExtractor:
         self.current_lvl3 = ""
         self.current_description = []
         self.collected_data = []
-        
+
     def extract_tables(self, file_path: str, file_type: str) -> List[Dict]:
         """提取表格数据的主入口"""
         if file_type == "pdf":
-            return self.extract_tables_from_pdf_bid(file_path)
+                return self.extract_tables_from_pdf_bid(file_path)
         elif file_type == "docx":
             if "合同" in file_path:
                 return self.extract_tables_from_word_contract(file_path)
@@ -116,7 +116,7 @@ class PDFWordTableExtractor:
                 return self.extract_tables_from_word_bid(file_path)
         else:
             return []
-    
+            
     def setup_custom_headers(self):
         """设置自定义表头映射"""
         self.custom_headers = {
@@ -140,7 +140,7 @@ class PDFWordTableExtractor:
         
         def reclassify_module(text, current_level):
             """重新分类模块"""
-            if not text:
+                if not text:
                 return current_level
             
             # 检查是否是一级模块
@@ -152,7 +152,7 @@ class PDFWordTableExtractor:
             # 检查是否是三级模块
             elif re.match(r'^\d+[、）)]', text) or re.match(r'^\d+\.\d+\.\d+\.\d+\.\d+\.\d+', text):
                 return 3
-            else:
+        else:
                 return current_level
         
         def should_enable_verification():
@@ -161,11 +161,11 @@ class PDFWordTableExtractor:
         
         def is_page_number(text):
             """检查是否为页码"""
-            if not text:
-                return False
-            page_indicators = ['第', '页', 'Page', 'page']
-            return any(indicator in str(text) for indicator in page_indicators)
-        
+                if not text:
+                    return False
+                page_indicators = ['第', '页', 'Page', 'page']
+                return any(indicator in str(text) for indicator in page_indicators)
+            
         data = []
         try:
             with pdfplumber.open(pdf_path) as pdf:
@@ -180,7 +180,7 @@ class PDFWordTableExtractor:
                     for line in lines:
                         line = line.strip()
                         if not line or is_page_number(line):
-                            continue
+                        continue
                         
                         # 重新分类模块
                         new_level = reclassify_module(line, current_level)
@@ -209,7 +209,7 @@ class PDFWordTableExtractor:
                                 self.current_lvl3 = ""
                             elif current_level == 3:
                                 self.current_lvl3 = line
-                        else:
+                            else:
                             # 收集描述
                             if current_level > 0:
                                 self.current_description.append(line)
@@ -226,15 +226,15 @@ class PDFWordTableExtractor:
                         })
                         self.current_description = []
         
-        except Exception as e:
+            except Exception as e:
             logger.error(f"PDF处理错误: {e}")
         
         return self.collected_data
-    
-    def extract_tables_from_pdf_bid_with_samples(self, pdf_path: str, lvl1_sample: str, 
+
+        def extract_tables_from_pdf_bid_with_samples(self, pdf_path: str, lvl1_sample: str, 
                                                lvl2_sample: str = "", lvl3_sample: str = "", 
                                                end_sample: str = "") -> List[Dict]:
-        """使用编号样例提取PDF标书 - 参考本地版逻辑"""
+        """使用编号样例提取PDF标书 - 严格按照本地版逻辑"""
         
         # 获取正则表达式
         lvl1_regex_info = get_fuzzy_regex_from_sample(lvl1_sample) if lvl1_sample else None
@@ -314,36 +314,33 @@ class PDFWordTableExtractor:
                         # 先判断三级
                         m3 = lvl3_regex.match(text) if lvl3_regex else None
                         if m3:
-                            # 遇到新三级编号时，先输出上一组（如果有描述）
-                            if in_lvl3 and desc_lines:
-                                results.append({
-                                    "一级模块名称": lvl1_to_fill,
-                                    "二级模块名称": lvl2_to_fill,
-                                    "三级模块名称": last_lvl3,
-                                    "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                    "合同描述": "",
-                                    "来源文件": os.path.basename(pdf_path)
-                                })
-                                desc_lines = []
-                                lvl1_filled = True
-                                lvl2_filled = True
+                            # 验证三级模块匹配的有效性
+                            def is_valid_lvl3_match(match_obj, original_text):
+                                """验证三级模块匹配是否有效"""
+                                if not match_obj:
+                                    return False
+                                
+                                # 提取匹配的编号部分
+                                number_part = match_obj.group(1)
+                                title_part = match_obj.group(2).strip()
+                                
+                                # 检查标题部分是否有内容
+                                if not title_part:
+                                    return False
+                                
+                                return True
+                            
+                            # 验证匹配有效性
+                            if not is_valid_lvl3_match(m3, raw_text.strip()):
+                                m3 = None
+                            
+                            if lvl3_regex_info and lvl3_regex_info['expected_digit_length']:
+                                text_digits = re.sub(r'[^\d]', '', m3.group(1))
+                                if len(text_digits) != lvl3_regex_info['expected_digit_length']:
+                                    m3 = None
 
-                            number = m3.group(1)
-                            title = m3.group(2).strip()
-                            current_lvl3 = f"{number} {title}".strip()
-                            last_lvl3 = current_lvl3
-                            in_lvl3 = True
-                            in_lvl2 = False
-                            lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
-                            lvl2_to_fill = current_lvl2 if not lvl2_filled else ""
-                            continue
-
-                        # 再判断二级
-                        m2 = lvl2_regex.match(text) if lvl2_regex else None
-                        if m2:
-                            # 根据是否有三级模块使用不同逻辑
-                            if has_lvl3_sample:
-                                # 有三级模块样例：使用老代码逻辑
+                            if m3:
+                                # 遇到新三级编号时，先输出上一组（如果有描述）
                                 if in_lvl3 and desc_lines:
                                     results.append({
                                         "一级模块名称": lvl1_to_fill,
@@ -357,77 +354,194 @@ class PDFWordTableExtractor:
                                     lvl1_filled = True
                                     lvl2_filled = True
 
-                                number = m2.group(1)
-                                title = m2.group(2).strip()
-                                current_lvl2 = f"{number} {title}".strip()
-                                last_lvl2 = current_lvl2
-                                in_lvl2 = True
-                                in_lvl3 = False
+                                number = m3.group(1)
+                                title = m3.group(2).strip()
+                                current_lvl3 = f"{number} {title}".strip()
+                                last_lvl3 = current_lvl3
+                                in_lvl3 = True
+                                in_lvl2 = False
                                 lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
+                                lvl2_to_fill = current_lvl2 if not lvl2_filled else ""
                                 continue
-                            else:
-                                # 没有三级模块样例：使用新逻辑
-                                if in_lvl2 and desc_lines:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": last_lvl2,
-                                        "三级模块名称": "",
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path)
-                                    })
-                                    desc_lines = []
-                                    lvl1_filled = True
 
-                                number = m2.group(1)
-                                title = m2.group(2).strip()
-                                current_lvl2 = f"{number} {title}".strip()
-                                last_lvl2 = current_lvl2
-                                in_lvl2 = True
-                                in_lvl3 = False
-                                lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
-                                continue
+                        # 再判断二级
+                        m2 = lvl2_regex.match(text) if lvl2_regex else None
+                        if m2:
+                            # 验证二级模块匹配的有效性
+                            def is_valid_lvl2_match(match_obj, original_text):
+                                """验证二级模块匹配是否有效"""
+                                if not match_obj:
+                                    return False
+                                
+                                # 提取匹配的编号部分
+                                number_part = match_obj.group(1)
+                                title_part = match_obj.group(2).strip()
+                                
+                                # 检查标题部分是否有内容
+                                if not title_part:
+                                    return False
+                                
+                                return True
+                            
+                            # 验证二级模块匹配有效性
+                            if not is_valid_lvl2_match(m2, raw_text.strip()):
+                                m2 = None
+                            
+                            if lvl2_regex_info and lvl2_regex_info['expected_digit_length']:
+                                text_digits = re.sub(r'[^\d]', '', m2.group(1))
+                                if len(text_digits) != lvl2_regex_info['expected_digit_length']:
+                                    m2 = None
+                            
+                            if m2:
+                                # 根据是否有三级模块使用不同逻辑
+                                if has_lvl3_sample:
+                                    # 有三级模块样例：使用老代码逻辑
+                                    if in_lvl3 and desc_lines:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": lvl2_to_fill,
+                                            "三级模块名称": last_lvl3,
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path)
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                        in_lvl3 = False
+
+                                    number = m2.group(1)
+                                    title = m2.group(2).strip()
+                                    current_lvl2 = f"{number} {title}".strip()
+                                    current_lvl3 = None
+                                    last_lvl2 = current_lvl2
+                                    lvl2_filled = False
+                                    in_lvl2 = True
+                                    in_lvl3 = False
+                                    
+                                    # 更新填充值
+                                    lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
+                                    lvl2_to_fill = current_lvl2
+                                    continue
+                                else:
+                                    # 没有三级模块样例：使用新代码逻辑
+                                    # 如果之前有描述内容，先输出上一组
+                                    if desc_lines and in_lvl2 and last_lvl2:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": last_lvl2,  # 使用上一个二级模块名称
+                                            "三级模块名称": "",
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path)
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                    
+                                    # 更新当前二级模块
+                                    number = m2.group(1)
+                                    title = m2.group(2).strip()
+                                    current_lvl2 = f"{number} {title}".strip()
+                                    current_lvl3 = None
+                                    last_lvl2 = current_lvl2
+                                    lvl2_filled = False
+                                    in_lvl2 = True
+                                    in_lvl3 = False
+                                    
+                                    # 更新填充值
+                                    lvl1_to_fill = current_lvl1 if not lvl1_filled else ""
+                                    lvl2_to_fill = current_lvl2
+                                    continue
 
                         # 最后判断一级
                         m1 = lvl1_regex.match(text) if lvl1_regex else None
                         if m1:
-                            # 输出上一组数据
-                            if desc_lines:
-                                if has_lvl3_sample and in_lvl3:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": lvl2_to_fill,
-                                        "三级模块名称": last_lvl3,
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path)
-                                    })
-                                elif in_lvl2:
-                                    results.append({
-                                        "一级模块名称": lvl1_to_fill,
-                                        "二级模块名称": last_lvl2,
-                                        "三级模块名称": "",
-                                        "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
-                                        "合同描述": "",
-                                        "来源文件": os.path.basename(pdf_path)
-                                    })
-                                desc_lines = []
-                                lvl1_filled = True
-                                lvl2_filled = True
+                            # 验证一级模块匹配的有效性
+                            def is_valid_lvl1_match(match_obj, original_text):
+                                """验证一级模块匹配是否有效"""
+                                if not match_obj:
+                                    return False
+                                
+                                # 提取匹配的编号部分
+                                number_part = match_obj.group(1)
+                                title_part = match_obj.group(2).strip()
+                                
+                                # 检查标题部分是否有内容
+                                if not title_part:
+                                    return False
+                                
+                                return True
+                            
+                            # 验证一级模块匹配有效性
+                            if not is_valid_lvl1_match(m1, raw_text.strip()):
+                                m1 = None
+                            
+                            if lvl1_regex_info and lvl1_regex_info['expected_digit_length']:
+                                text_digits = re.sub(r'[^\d]', '', m1.group(1))
+                                if len(text_digits) != lvl1_regex_info['expected_digit_length']:
+                                    m1 = None
+                            
+                            if m1:
+                                # 根据是否有三级模块使用不同逻辑
+                                if has_lvl3_sample:
+                                    # 有三级模块样例：使用老代码逻辑
+                                    if in_lvl3 and desc_lines:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": lvl2_to_fill,
+                                            "三级模块名称": last_lvl3,
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path)
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                        in_lvl3 = False
+                                else:
+                                    # 没有三级模块样例：使用新代码逻辑
+                                    if desc_lines and not in_lvl3:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": lvl2_to_fill,
+                                            "三级模块名称": "",
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path)
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
 
-                            number = m1.group(1)
-                            title = m1.group(2).strip()
-                            current_lvl1 = f"{number} {title}".strip()
-                            last_lvl1 = current_lvl1
-                            lvl1_filled = False
-                            lvl2_filled = False
-                            in_lvl2 = False
-                            in_lvl3 = False
-                            lvl1_to_fill = current_lvl1
-                            lvl2_to_fill = current_lvl2 if current_lvl2 else ""
-                            continue
+                                    if in_lvl3 and desc_lines:
+                                        results.append({
+                                            "一级模块名称": lvl1_to_fill,
+                                            "二级模块名称": lvl2_to_fill,
+                                            "三级模块名称": last_lvl3,
+                                            "标书描述": '\n\n'.join(self._merge_paragraphs(desc_lines)).strip(),
+                                            "合同描述": "",
+                                            "来源文件": os.path.basename(pdf_path)
+                                        })
+                                        desc_lines = []
+                                        lvl1_filled = True
+                                        lvl2_filled = True
+                                        in_lvl3 = False
 
-                        # 修改后的收集逻辑 - 关键修复
+                                number = m1.group(1)
+                                title = m1.group(2).strip()
+                                current_lvl1 = f"{number} {title}".strip()
+                                current_lvl2 = current_lvl3 = None
+                                last_lvl1 = current_lvl1
+                                lvl1_filled = False
+                                lvl2_filled = False
+                                in_lvl2 = False
+                                in_lvl3 = False
+                                lvl1_to_fill = current_lvl1
+                                lvl2_to_fill = current_lvl2 if current_lvl2 else ""
+                                continue
+
+                        # 修改后的收集逻辑 - 严格按照本地版
                         if extracting:
                             # 更严格的描述收集验证
                             def should_collect_description():
@@ -479,7 +593,7 @@ class PDFWordTableExtractor:
             logger.error(f"PDF处理错误: {e}")
         
         return results
-    
+
     def extract_tables_from_pdf_contract_with_samples(self, pdf_path: str, lvl1_sample: str, 
                                                     lvl2_sample: str = "", lvl3_sample: str = "", 
                                                     end_sample: str = "") -> List[Dict]:
@@ -607,7 +721,7 @@ class PDFWordTableExtractor:
                     data.append(mapped)
         
         return data
-    
+
     def extract_tables_from_word_bid(self, docx_path: str) -> List[Dict]:
         """提取Word标书文件中的表格"""
         data = self.extract_tables_from_word_contract(docx_path)
@@ -618,8 +732,8 @@ class PDFWordTableExtractor:
                 item['标书描述'] = item['合同描述']
                 item['合同描述'] = ''
         
-        return data
-    
+            return data
+        
     def _is_target_table_custom(self, headers: List[str]) -> bool:
         """检查是否是目标表格（自定义表头）"""
         if self.custom_headers:
@@ -640,7 +754,7 @@ class PDFWordTableExtractor:
         if self.custom_headers:
             # 使用自定义表头
             return list(self.custom_headers.keys())
-        else:
+            else:
             # 使用默认表头
             return ['功能描述', '三级模块', '功能模块', '功能子项']
     
@@ -673,7 +787,7 @@ class PDFWordTableExtractor:
                 '合同描述': desc_value,  # Word合同内容放这里
                 '来源文件': original_filename if original_filename else (os.path.basename(source_file) if not source_file.endswith('tmp') else '合同.docx'),
             }
-        else:
+                    else:
             # 使用默认映射，但增强合同描述的处理
             mapped = self._map_word_row(row_data, source_file)
             
@@ -703,7 +817,7 @@ class PDFWordTableExtractor:
                 normalized_header = header_cell.replace('\n', '').replace('\\n', '')
                 if normalized_target in normalized_header:
                     found_headers.append(original_target)
-                    break
+                            break
         
         return len(found_headers) >= 2
     
@@ -722,7 +836,7 @@ class PDFWordTableExtractor:
             for normalized_field, original_field in field_mapping.items():
                 if normalized_field in normalized_header:
                     mapped_data[original_field] = value
-                    break
+                                break
         
         mapped = {
             '一级模块名称': mapped_data.get('功能模块', ''),
@@ -930,7 +1044,7 @@ class PDFWordTableExtractor:
                         new_item['标书描述'] = part
                         processed_data.append(new_item)
                         processed_item = None
-                        break
+                            break
                 if processed_item:
                     processed_data.append(processed_item)
             else:
@@ -984,7 +1098,7 @@ class PDFWordTableExtractor:
                         if line_chars > 30:
                             needed_lines = (line_chars // 30) + 1
                             max_chars = max(max_chars, needed_lines * 30)
-                        else:
+                else:
                             max_chars = max(max_chars, line_chars)
                 
                 # 计算行高
