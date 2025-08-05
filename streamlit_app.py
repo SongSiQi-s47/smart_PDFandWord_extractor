@@ -3,6 +3,7 @@ import streamlit as st
 import os
 import tempfile
 import pandas as pd
+import re
 from pdf_extractorV2_2 import PDFWordTableExtractor
 
 def main():
@@ -282,6 +283,37 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
         column_order = ['一级模块名称', '二级模块名称', '三级模块名称', '标书描述', '合同描述', '来源文件']
         df = df[column_order]
         
+        # 清理数据中的非法字符
+        def clean_data_for_excel(value):
+            """清理数据，确保Excel兼容"""
+            if pd.isna(value) or value is None:
+                return ''
+            
+            # 转换为字符串
+            value_str = str(value)
+            
+            # 移除控制字符和非法字符
+            cleaned = ''
+            for char in value_str:
+                # 只保留可打印字符和常见的中文字符
+                if char.isprintable() or '\u4e00' <= char <= '\u9fff':
+                    cleaned += char
+            
+            # 移除调试信息中的特殊字符
+            cleaned = cleaned.replace('🔍', '').replace('✅', '').replace('⚠️', '').replace('📋', '')
+            
+            # 移除多余的空白字符
+            cleaned = re.sub(r'\s+', ' ', cleaned.strip())
+            
+            # 移除Excel不允许的特殊字符
+            cleaned = re.sub(r'[^\w\s\u4e00-\u9fff.,，。！？：:()（）\-]', '', cleaned)
+            
+            return cleaned
+        
+        # 应用清理函数到所有列
+        for col in df.columns:
+            df[col] = df[col].apply(clean_data_for_excel)
+        
         # 显示数据预览
         st.subheader("📊 数据预览")
         st.dataframe(df.head(10), use_container_width=True)
@@ -310,9 +342,14 @@ def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sam
             
             # 创建Excel文件
             excel_buffer = BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='提取结果', index=False)
-                worksheet = writer.sheets['提取结果']
+            try:
+                with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                    df.to_excel(writer, sheet_name='提取结果', index=False)
+                    worksheet = writer.sheets['提取结果']
+            except Exception as e:
+                st.error(f"Excel导出失败: {str(e)}")
+                st.error("请尝试下载CSV文件")
+                return
                 
                 # 设置列宽
                 column_widths = {
