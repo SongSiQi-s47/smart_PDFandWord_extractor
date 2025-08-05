@@ -140,7 +140,7 @@ class PDFWordTableExtractor:
         
         def reclassify_module(text, current_level):
             """重新分类模块"""
-                if not text:
+            if not text:
                 return current_level
             
             # 检查是否是一级模块
@@ -152,7 +152,7 @@ class PDFWordTableExtractor:
             # 检查是否是三级模块
             elif re.match(r'^\d+[、）)]', text) or re.match(r'^\d+\.\d+\.\d+\.\d+\.\d+\.\d+', text):
                 return 3
-        else:
+            else:
                 return current_level
         
         def should_enable_verification():
@@ -161,11 +161,11 @@ class PDFWordTableExtractor:
         
         def is_page_number(text):
             """检查是否为页码"""
-                if not text:
-                    return False
-                page_indicators = ['第', '页', 'Page', 'page']
-                return any(indicator in str(text) for indicator in page_indicators)
-            
+            if not text:
+                return False
+            page_indicators = ['第', '页', 'Page', 'page']
+            return any(indicator in str(text) for indicator in page_indicators)
+        
         data = []
         try:
             with pdfplumber.open(pdf_path) as pdf:
@@ -180,7 +180,7 @@ class PDFWordTableExtractor:
                     for line in lines:
                         line = line.strip()
                         if not line or is_page_number(line):
-                        continue
+                            continue
                         
                         # 重新分类模块
                         new_level = reclassify_module(line, current_level)
@@ -209,7 +209,7 @@ class PDFWordTableExtractor:
                                 self.current_lvl3 = ""
                             elif current_level == 3:
                                 self.current_lvl3 = line
-                            else:
+                        else:
                             # 收集描述
                             if current_level > 0:
                                 self.current_description.append(line)
@@ -226,12 +226,12 @@ class PDFWordTableExtractor:
                         })
                         self.current_description = []
         
-            except Exception as e:
+        except Exception as e:
             logger.error(f"PDF处理错误: {e}")
         
         return self.collected_data
 
-        def extract_tables_from_pdf_bid_with_samples(self, pdf_path: str, lvl1_sample: str, 
+    def extract_tables_from_pdf_bid_with_samples(self, pdf_path: str, lvl1_sample: str, 
                                                lvl2_sample: str = "", lvl3_sample: str = "", 
                                                end_sample: str = "") -> List[Dict]:
         """使用编号样例提取PDF标书 - 严格按照本地版逻辑"""
