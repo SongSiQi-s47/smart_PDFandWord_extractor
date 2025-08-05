@@ -754,7 +754,7 @@ class PDFWordTableExtractor:
         if self.custom_headers:
             # 使用自定义表头
             return list(self.custom_headers.keys())
-            else:
+        else:
             # 使用默认表头
             return ['功能描述', '三级模块', '功能模块', '功能子项']
     
@@ -787,7 +787,7 @@ class PDFWordTableExtractor:
                 '合同描述': desc_value,  # Word合同内容放这里
                 '来源文件': original_filename if original_filename else (os.path.basename(source_file) if not source_file.endswith('tmp') else '合同.docx'),
             }
-                    else:
+        else:
             # 使用默认映射，但增强合同描述的处理
             mapped = self._map_word_row(row_data, source_file)
             
@@ -817,7 +817,7 @@ class PDFWordTableExtractor:
                 normalized_header = header_cell.replace('\n', '').replace('\\n', '')
                 if normalized_target in normalized_header:
                     found_headers.append(original_target)
-                            break
+                    break
         
         return len(found_headers) >= 2
     
@@ -836,7 +836,7 @@ class PDFWordTableExtractor:
             for normalized_field, original_field in field_mapping.items():
                 if normalized_field in normalized_header:
                     mapped_data[original_field] = value
-                                break
+                    break
         
         mapped = {
             '一级模块名称': mapped_data.get('功能模块', ''),
@@ -1044,7 +1044,7 @@ class PDFWordTableExtractor:
                         new_item['标书描述'] = part
                         processed_data.append(new_item)
                         processed_item = None
-                            break
+                        break
                 if processed_item:
                     processed_data.append(processed_item)
             else:
