@@ -759,10 +759,7 @@ class PDFWordTableExtractor:
                     return True
             return any(re.match(pattern, text.strip()) for pattern in page_patterns)
         
-        # Web版本不应该在这里获取用户输入，应该通过参数传入
-        # 这个方法在web版本中不会被直接调用，而是通过extract_tables_from_pdf_bid_with_samples调用
-        return []
-
+        # 使用传入的编号样例
         lvl1_regex_info = get_fuzzy_regex_from_sample(lvl1_sample) if lvl1_sample else None
         lvl2_regex_info = get_fuzzy_regex_from_sample(lvl2_sample) if lvl2_sample else None
         lvl3_regex_info = get_fuzzy_regex_from_sample(lvl3_sample) if lvl3_sample else None
