@@ -260,7 +260,15 @@ class PDFWordTableExtractor:
                         break
             
             # 确保Word合同内容映射到"合同描述"
+            # 首先尝试从映射数据中获取合同描述
             desc_value = mapped_data.get('合同描述', '')
+            
+            # 如果没有找到合同描述，尝试从原始数据中查找功能描述
+            if not desc_value:
+                for header, value in row_data.items():
+                    if '功能描述' in header or '描述' in header or '备注' in header:
+                        desc_value = value
+                        break
             
             mapped = {
                 '一级模块名称': mapped_data.get('一级模块名称', ''),
