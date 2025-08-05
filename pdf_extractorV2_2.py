@@ -54,16 +54,45 @@ def get_regex_from_sample(sample):
 def get_fuzzy_regex_from_sample(sample):
     """获取模糊匹配的正则表达式"""
     if not sample:
-        return ""
+        return None
     
-    # 创建更宽松的匹配模式
+    # 匹配"数字.数字.数字."结构（如 9.1.4.3.1.），更灵活
+    if re.match(r'^\d+(\.\d+)+\.?$', sample):
+        # 返回带分组的正则，编号部分更灵活，支持末尾没有点的情况
+        # 新增：记录原始样例的数字长度，用于后续长度检查
+        sample_digits = re.sub(r'[^\d]', '', sample)
+        regex = re.compile(r'^(\d+(?:\.\d+)+[\.\s\u3000．、]*)(.*)$')
+        # 返回字典，包含正则和长度信息
+        return {
+            'regex': regex,
+            'expected_digit_length': len(sample_digits)
+        }
+    
+    # 匹配"数字）"或"数字)"结构（如 1） 或 1) ），支持中英文括号
+    if re.match(r'^\d+[）)]$', sample):
+        return {
+            'regex': re.compile(r'^(\d+[\)\）])(.*)$'),
+            'expected_digit_length': None
+        }
+    
+    # 匹配"（数字）"或"(数字)"结构（如 （1） 或 (1) ），支持中英文括号
+    if re.match(r'^[（(]\d+[）)]$', sample):
+        return {
+            'regex': re.compile(r'^([\(（]\d+[\)）])(.*)$'),
+            'expected_digit_length': None
+        }
+    
+    # 默认情况：创建简单的正则表达式
     pattern = re.escape(sample)
     # 允许数字变化
     pattern = re.sub(r'\\d\+', r'\\d+', pattern)
     # 允许字母变化
     pattern = re.sub(r'[a-zA-Z]', r'[a-zA-Z]', pattern)
     
-    return f"^{pattern}"
+    return {
+        'regex': re.compile(f"^{pattern}(.*)$"),
+        'expected_digit_length': None
+    }
 
 def smart_start_match(sample, text, regex):
     """智能开始匹配"""
@@ -772,31 +801,17 @@ class PDFWordTableExtractor:
             # 确保Word合同内容映射到"合同描述"
             desc_value = mapped_data.get('合同描述', '')
             
-            # 如果合同描述为空，尝试从原始数据中查找
-            if not desc_value:
-                for header, value in row_data.items():
-                    if value.strip() and ('描述' in header or '备注' in header or '内容' in header or '功能' in header):
-                        desc_value = value
-                        break
-            
             mapped = {
                 '一级模块名称': mapped_data.get('一级模块名称', ''),
                 '二级模块名称': mapped_data.get('二级模块名称', ''),
                 '三级模块名称': mapped_data.get('三级模块名称', ''),
                 '标书描述': '',  # Word合同文件，标书描述为空
                 '合同描述': desc_value,  # Word合同内容放这里
-                '来源文件': original_filename if original_filename else (os.path.basename(source_file) if not source_file.endswith('tmp') else '合同.docx'),
+                '来源文件': original_filename if original_filename else os.path.basename(source_file),
             }
         else:
-            # 使用默认映射，但增强合同描述的处理
+            # 使用默认映射
             mapped = self._map_word_row(row_data, source_file)
-            
-            # 如果合同描述为空，尝试从原始数据中查找
-            if not mapped['合同描述']:
-                for header, value in row_data.items():
-                    if value.strip() and ('描述' in header or '备注' in header or '内容' in header or '功能' in header):
-                        mapped['合同描述'] = value
-                        break
         
         return mapped
     
