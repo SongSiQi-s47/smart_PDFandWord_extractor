@@ -19,32 +19,61 @@ from openpyxl.styles import Font, Alignment, Border, Side
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 汉字数字
+CN_NUM = '零一二三四五六七八九十百千万亿〇壹贰叁肆伍陆柒捌玖拾'
+
 def parse_sample_to_template(sample):
-    """将样例转换为模板"""
-    if not sample:
-        return ""
-    
-    # 替换数字为占位符
-    template = re.sub(r'\d+', 'N', sample)
-    # 替换字母为占位符
-    template = re.sub(r'[a-zA-Z]+', 'L', template)
+    template = []
+    i = 0
+    while i < len(sample):
+        c = sample[i]
+        if c.isdigit():
+            num = c
+            while i+1 < len(sample) and sample[i+1].isdigit():
+                i += 1
+                num += sample[i]
+            template.append(('digit', num))
+        elif c in CN_NUM:
+            cn = c
+            while i+1 < len(sample) and sample[i+1] in CN_NUM:
+                i += 1
+                cn += sample[i]
+            template.append(('cndigit', cn))
+        elif c in '()（）':
+            template.append(('paren', c))
+        elif c in '【】':
+            template.append(('bracket', c))
+        elif c in '.、.':
+            template.append(('sep', c))
+        elif '\u4e00' <= c <= '\u9fa5':
+            word = c
+            while i+1 < len(sample) and '\u4e00' <= sample[i+1] <= '\u9fa5':
+                i += 1
+                word += sample[i]
+            template.append(('ch', word))
+        else:
+            template.append(('other', c))
+        i += 1
     return template
 
 def template_to_regex(template):
-    """将模板转换为正则表达式"""
-    if not template:
-        return ""
-    
-    # 替换占位符为对应的正则表达式
-    regex = template.replace('N', r'\d+')
-    regex = regex.replace('L', r'[a-zA-Z]+')
-    # 转义特殊字符
-    regex = re.escape(regex)
-    # 恢复占位符的正则表达式
-    regex = regex.replace(r'\\N', r'\d+')
-    regex = regex.replace(r'\\L', r'[a-zA-Z]+')
-    
-    return f"^{regex}$"
+    regex = ''
+    for t, val in template:
+        if t == 'digit':
+            regex += r'\d+'
+        elif t == 'cndigit':
+            regex += f'[{CN_NUM}]+'
+        elif t == 'paren':
+            regex += re.escape(val)
+        elif t == 'bracket':
+            regex += re.escape(val)
+        elif t == 'sep':
+            regex += re.escape(val)
+        elif t == 'ch':
+            regex += f'.{{1,{len(val)+3}}}'
+        else:
+            regex += re.escape(val)
+    return regex
 
 def get_regex_from_sample(sample):
     """从样例直接获取正则表达式"""
@@ -52,10 +81,9 @@ def get_regex_from_sample(sample):
     return template_to_regex(template)
 
 def get_fuzzy_regex_from_sample(sample):
-    """获取模糊匹配的正则表达式"""
-    if not sample:
-        return None
-    
+    """
+    生成更灵活的正则表达式，支持各种编号格式
+    """
     # 匹配"数字.数字.数字."结构（如 9.1.4.3.1.），更灵活
     if re.match(r'^\d+(\.\d+)+\.?$', sample):
         # 返回带分组的正则，编号部分更灵活，支持末尾没有点的情况
@@ -78,41 +106,61 @@ def get_fuzzy_regex_from_sample(sample):
     # 匹配"（数字）"或"(数字)"结构（如 （1） 或 (1) ），支持中英文括号
     if re.match(r'^[（(]\d+[）)]$', sample):
         return {
-            'regex': re.compile(r'^([\(（]\d+[\)）])(.*)$'),
+            'regex': re.compile(r'^([（(]\d+[\)\）])(.*)$'),
             'expected_digit_length': None
         }
     
-    # 默认情况：创建简单的正则表达式
-    pattern = re.escape(sample)
-    # 允许数字变化
-    pattern = re.sub(r'\\d\+', r'\\d+', pattern)
-    # 允许字母变化
-    pattern = re.sub(r'[a-zA-Z]', r'[a-zA-Z]', pattern)
+    # 匹配"（汉字数字）"或"(汉字数字)"结构（如 （十一） 或 (十一) ），支持更多汉字数字
+    if re.match(r'^[（(][零一二三四五六七八九十百千万亿]+[）)]$', sample):
+        return {
+            'regex': re.compile(r'^([（(][零一二三四五六七八九十百千万亿]+[\)\）])(.*)$'),
+            'expected_digit_length': None
+        }
     
+    # 新增：匹配"数字."结构（如 1.），生成更严格的正则
+    if re.match(r'^\d+\.$', sample):
+        return {
+            'regex': re.compile(r'^(\d+\.)(.*)$'),
+            'expected_digit_length': None
+        }
+    
+    # 其他类型：先去除所有空白字符（包括全角空格），再用模板解析生成正则
+    sample = re.sub(r'[\s\u3000]', '', sample)
+    template = parse_sample_to_template(sample)
+    regex = template_to_regex(template)
+    regex = regex.rstrip(r'\.')
+    regex += r'[\.\s\u3000．、]*'  # 允许编号后有点、空格、顿号等
     return {
-        'regex': re.compile(f"^{pattern}(.*)$"),
+        'regex': re.compile(f'^({regex})(.*)$'),
         'expected_digit_length': None
     }
 
 def smart_start_match(sample, text, regex):
-    """智能开始匹配"""
-    if not sample or not text:
-        return False
+    """
+    智能起始编号匹配，支持多种匹配策略
+    """
+    match = regex.match(text)
+    if not match:
+        return False, None, None
     
-    # 直接字符串匹配
-    if sample in text:
-        return True
+    # 提取数字序列
+    sample_digits = re.sub(r'[^\d]', '', sample)
+    text_number_part = match.group(1)
+    text_digits = re.sub(r'[^\d]', '', text_number_part)
     
-    # 正则表达式匹配
-    if regex and re.search(regex, text):
-        return True
+    # 多种匹配策略
+    if sample_digits == text_digits:
+        return True, "完全匹配", text_digits
+    elif text_digits.startswith(sample_digits):
+        return True, "前缀匹配", text_digits
+    elif sample_digits.startswith(text_digits):
+        # 前缀匹配时检查长度是否一致
+        if len(text_digits) == len(sample_digits):
+            return True, "前缀匹配", text_digits
+        else:
+            return False, "前缀长度不匹配", text_digits
     
-    # 模糊匹配
-    fuzzy_regex = get_fuzzy_regex_from_sample(sample)
-    if fuzzy_regex and re.search(fuzzy_regex, text):
-        return True
-    
-    return False
+    return False, "不匹配", text_digits
 
 class PDFWordTableExtractor:
     def __init__(self):
@@ -761,7 +809,7 @@ class PDFWordTableExtractor:
                 item['标书描述'] = item['合同描述']
                 item['合同描述'] = ''
         
-            return data
+        return data
         
     def _is_target_table_custom(self, headers: List[str]) -> bool:
         """检查是否是目标表格（自定义表头）"""
