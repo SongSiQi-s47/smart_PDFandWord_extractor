@@ -139,8 +139,12 @@ def smart_start_match(sample, text, regex):
     """
     智能起始编号匹配，支持多种匹配策略
     """
+    # 添加调试信息
+    print(f"DEBUG: smart_start_match called with sample={sample}, text={text[:50]}...")
+    
     match = regex.match(text)
     if not match:
+        print(f"DEBUG: No match found, returning (False, None, None)")
         return False, None, None
     
     # 提取数字序列
@@ -150,17 +154,27 @@ def smart_start_match(sample, text, regex):
     
     # 多种匹配策略
     if sample_digits == text_digits:
-        return True, "完全匹配", text_digits
+        result = (True, "完全匹配", text_digits)
+        print(f"DEBUG: Exact match found, returning {result}")
+        return result
     elif text_digits.startswith(sample_digits):
-        return True, "前缀匹配", text_digits
+        result = (True, "前缀匹配", text_digits)
+        print(f"DEBUG: Prefix match found, returning {result}")
+        return result
     elif sample_digits.startswith(text_digits):
         # 前缀匹配时检查长度是否一致
         if len(text_digits) == len(sample_digits):
-            return True, "前缀匹配", text_digits
+            result = (True, "前缀匹配", text_digits)
+            print(f"DEBUG: Prefix length match found, returning {result}")
+            return result
         else:
-            return False, "前缀长度不匹配", text_digits
+            result = (False, "前缀长度不匹配", text_digits)
+            print(f"DEBUG: Prefix length mismatch, returning {result}")
+            return result
     
-    return False, "不匹配", text_digits
+    result = (False, "不匹配", text_digits)
+    print(f"DEBUG: No match strategy found, returning {result}")
+    return result
 
 class PDFWordTableExtractor:
     def __init__(self):
