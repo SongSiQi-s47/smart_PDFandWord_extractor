@@ -4,15 +4,42 @@ import os
 import tempfile
 import pandas as pd
 import re
-from pdf_extractorV2_2 import PDFWordTableExtractor
+import traceback
+import sys
+
+# 添加错误处理
+try:
+    from pdf_extractorV2_2 import PDFWordTableExtractor
+    st.session_state['extractor_loaded'] = True
+except Exception as e:
+    st.error(f"❌ 导入PDF提取器失败: {str(e)}")
+    st.code(traceback.format_exc())
+    st.stop()
 
 def main():
-    st.set_page_config(
-        page_title="智能表格提取工具",
-        page_icon="📋",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
+    # 添加调试信息
+    try:
+        st.set_page_config(
+            page_title="智能表格提取工具",
+            page_icon="📋",
+            layout="wide",
+            initial_sidebar_state="collapsed"
+        )
+        
+        # 显示系统信息
+        if 'debug_mode' not in st.session_state:
+            st.session_state.debug_mode = True
+            
+        if st.session_state.debug_mode:
+            with st.expander("🔧 调试信息", expanded=False):
+                st.write(f"Python版本: {sys.version}")
+                st.write(f"Streamlit版本: {st.__version__}")
+                st.write(f"提取器加载状态: {st.session_state.get('extractor_loaded', '未知')}")
+                
+    except Exception as e:
+        st.error(f"❌ 页面配置失败: {str(e)}")
+        st.code(traceback.format_exc())
+        return
     
     # 自定义CSS样式
     st.markdown("""
@@ -209,7 +236,12 @@ def main():
 
 def process_files(uploaded_files, lvl1_sample, lvl2_sample, lvl3_sample, end_sample, custom_headers=None):
     """处理上传的文件"""
-    extractor = PDFWordTableExtractor()
+    try:
+        extractor = PDFWordTableExtractor()
+    except Exception as e:
+        st.error(f"❌ 创建提取器失败: {str(e)}")
+        st.code(traceback.format_exc())
+        return
     
     # 设置自定义表头
     if custom_headers:
